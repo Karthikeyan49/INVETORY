@@ -31,6 +31,7 @@ import Reports from "./pages/Reports";
 import Employees from "./pages/Employees";
 import Attendance from "./pages/Attendance";
 import Payroll from "./pages/Payroll";
+import Incentives from "./pages/Incentives";
 import AdvanceRegister from "./pages/AdvanceRegister";
 import Tasks from "./pages/Tasks";
 import Meetings from "./pages/Meetings";
@@ -138,6 +139,7 @@ function ProtectedRoutes() {
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/hr-compliance" element={<HrCompliance />} />
         <Route path="/payroll" element={<Payroll />} />
+        <Route path="/incentives" element={<Incentives />} />
         <Route path="/advance-register" element={<AdvanceRegister />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/meetings" element={<Meetings />} />

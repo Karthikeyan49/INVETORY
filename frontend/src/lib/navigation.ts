@@ -90,6 +90,7 @@ export const sections: MenuSection[] = [
       { title: "Employees", url: "/employees", icon: Contact2 },
       { title: "Attendance", url: "/attendance", icon: ClipboardCheck },
       { title: "Payroll", url: "/payroll", icon: BadgeIndianRupee },
+      { title: "Incentives", url: "/incentives", icon: BadgeIndianRupee },
       { title: "Advance Register", url: "/advance-register", icon: Wallet },
     ],
   },

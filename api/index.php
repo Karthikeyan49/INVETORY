@@ -103,6 +103,7 @@ require_once ROOT_PATH . '/models/AttendanceShift.php';
 require_once ROOT_PATH . '/models/Attendance.php';
 require_once ROOT_PATH . '/models/AttendanceAnalytics.php';
 require_once ROOT_PATH . '/models/Payroll.php';
+require_once ROOT_PATH . '/models/Incentive.php';
 require_once ROOT_PATH . '/models/EmployeeAdvance.php';
 require_once ROOT_PATH . '/models/Task.php';
 require_once ROOT_PATH . '/models/Meeting.php';
@@ -179,6 +180,7 @@ require_once ROOT_PATH . '/controllers/admin/AdminTaskController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminEmployeeController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminAttendanceController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminPayrollController.php';
+require_once ROOT_PATH . '/controllers/admin/AdminIncentiveController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminEmployeeAdvanceController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminFaqController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminMeetingController.php';
@@ -789,6 +791,14 @@ $router->post('/admin/payroll/ai-check',              [AdminPayrollController::c
 $router->post('/admin/payroll/run',                   [AdminPayrollController::class, 'run'],      'admin');
 $router->post('/admin/payroll/calculate',             [AdminPayrollController::class, 'calculate'],'admin');
 $router->post('/admin/payroll/process',               [AdminPayrollController::class, 'process'],  'admin');
+
+// ─── Admin Incentive Payments (R7 / T10) — output-based pay, separate from payroll
+$router->get('/admin/incentives',                     [AdminIncentiveController::class, 'index'],   'admin');
+$router->post('/admin/incentives',                    [AdminIncentiveController::class, 'store'],   'admin:owner,accountant,hr');
+$router->get('/admin/incentives/{id}',                [AdminIncentiveController::class, 'show'],    'admin');
+$router->put('/admin/incentives/{id}',                [AdminIncentiveController::class, 'update'],  'admin:owner,accountant,hr');
+$router->post('/admin/incentives/{id}/pay',           [AdminIncentiveController::class, 'pay'],     'admin:owner,accountant,hr');
+$router->delete('/admin/incentives/{id}',             [AdminIncentiveController::class, 'destroy'], 'admin:owner,accountant,hr');
 
 // ─── Admin Employee Advances ────────────────────────────────────────────────
 $router->get('/admin/employee-advances',              [AdminEmployeeAdvanceController::class, 'index'],   'admin');

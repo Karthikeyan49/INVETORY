@@ -220,7 +220,7 @@ create/list/approve; generate the DCR PDF; connect field visits → leads/quotat
 - [x] **T8** Delivery Challan carries tax + extra; Invoice shows extra (extended);
       DC→Invoice include‑extra checkbox (extended only) (R4).
 - [x] **T9** Cash Bill trigger on cash‑category invoices / service records (R5).
-- [ ] **T10** HR Incentive Payments page + incentive payslip (R7).
+- [x] **T10** HR Incentive Payments page + incentive payslip (R7).
 - [ ] **T11** DCR (Daily Call Report) page + PDF (R13).
 - [ ] **T12** Cross‑cutting sweep: confirm `extra_amount` gating is present and correct
       in every payment feature above (R1). Verify standard vs extended totals differ by
@@ -312,6 +312,17 @@ and stop.
   qty/amount/total onto `CashBillData`; a "Cash Bill" button appears in the invoice
   detail dialog only for **Cash** payment-method invoices. `npm run build` green.
   (cloud run: no deploy)
+- 2026-07-09 — **T10 done**: HR Incentive Payments (R7). Migration `027_incentives.sql`
+  — `incentives` table (employee link, person, basis per_sale/per_visit/per_collection/
+  fixed/percentage, rate/units/base, computed amount, extra_amount, period, status,
+  payment_category/UTR, expense link) idempotent. `Incentive` model (computeAmount,
+  CRUD, markPaid → posts an **Incentive expense → Finance/P&L**). `AdminIncentiveController`
+  (index with paid/unpaid summary, show/store/update/pay/destroy, extra_amount gating),
+  routes registered (hr/accountant/owner). Frontend `lib/api/incentives.ts` +
+  `Incentives.tsx` (summary tiles, basis-aware form with live amount, employee picker,
+  pay dialog posting expense) + `incentivePayslipPdf.ts` payslip, nav "Incentives"
+  under HR, route `/incentives`. Separate from fixed payroll. `npm run build` green;
+  `php -l` clean. (cloud run: no deploy)
 
 ---
 
