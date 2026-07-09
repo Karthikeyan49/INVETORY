@@ -16,7 +16,7 @@ declare(strict_types=1);
  */
 class PaymentInstallment
 {
-    public const REF_TYPES   = ['purchase_order', 'stamping', 'purchase', 'incentive', 'invoice'];
+    public const REF_TYPES   = ['purchase_order', 'po_register', 'stamping', 'purchase', 'incentive', 'invoice'];
     public const CATEGORIES  = ['Bank Transfer', 'Cash', 'UPI'];
 
     private static function validRefType(string $t): bool
