@@ -217,7 +217,7 @@ create/list/approve; generate the DCR PDF; connect field visits → leads/quotat
       forecasting (R6).
 - [x] **T7** Quotation Builder 4‑format selector wired to Sri Vari builders (R2), and
       quotation → Invoice + Delivery Challan conversion (R3).
-- [ ] **T8** Delivery Challan carries tax + extra; Invoice shows extra (extended);
+- [x] **T8** Delivery Challan carries tax + extra; Invoice shows extra (extended);
       DC→Invoice include‑extra checkbox (extended only) (R4).
 - [ ] **T9** Cash Bill trigger on cash‑category invoices / service records (R5).
 - [ ] **T10** HR Incentive Payments page + incentive payslip (R7).
@@ -297,6 +297,15 @@ and stop.
   per format (service=description rows, others=machine rows), and a
   "Convert to Delivery Challan" list action (prefilled draft challan, alongside the
   existing convert-to-invoice). `npm run build` green; `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T8 done**: DC ↔ Invoice extra (R4). DC record already carries tax
+  + extra_amount/extra_from_vendor (create form + extended-only list columns, gated
+  server-side). Invoices already support/display extra_amount (extended, Set-2).
+  Added **DC→Invoice conversion** on the Deliveries page: a "To Invoice" action opens
+  a dialog that creates a draft GST invoice prefilled from the challan (customer,
+  goods, taxable → line, GST rate derived from tax/amount); an **"include extra
+  amount" checkbox shown only to the extended login** carries the challan's off-books
+  extra onto the invoice. Printed challan PDF intentionally omits off-books figures.
+  `npm run build` green. (cloud run: no deploy)
 
 ---
 
