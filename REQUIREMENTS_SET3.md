@@ -205,7 +205,7 @@ create/list/approve; generate the DCR PDF; connect field visits → leads/quotat
 
 - [x] **T1** Rename "Complaints" → "Customer Complaints" (R8). *(quick)*
 - [x] **T2** Machine `local` vs `brand` option + filter (R11). *(quick)*
-- [ ] **T3** Payment core: category dropdown (Bank/Cash/UPI) + UTR field + multi‑installment
+- [x] **T3** Payment core: category dropdown (Bank/Cash/UPI) + UTR field + multi‑installment
       ledger + live outstanding, as a reusable pattern (R12). Retrofit existing
       Purchases/Payments to it.
 - [ ] **T4** Purchase Order register page: by‑category, advance/paid/outstanding,
@@ -241,6 +241,19 @@ and stop.
   filter, MachineController store/update `only()` + index filter, machines API
   type/filter, Machines page form selector + list filter + Type column badge. Frontend
   `npm run build` green; `php -l` clean on Machine model + controller. (cloud run: no deploy)
+- 2026-07-09 — **T3 done**: reusable installment ledger (R12). New polymorphic
+  `payment_installments` table + `utr_no` on `payments`/`purchases`
+  (migration `022_payment_installments.sql`, idempotent). Model
+  `PaymentInstallment` (record/forRef/paidTotal/outstanding/summariseRef/
+  paidTotalsByType, categories Bank Transfer/Cash/UPI, seq→Advance/1st/2nd labels).
+  Generic `AdminInstallmentController` (GET/POST/DELETE `/admin/installments`) with
+  tax_view-gated grand-total resolution per ref_type (purchase/PO/stamping/incentive/
+  invoice) so outstanding auto-includes off-books extra only for extended login.
+  Routes registered. Frontend: `lib/api/installments.ts` + reusable
+  `PaymentLedger.tsx` component (category dropdown + UTR field + installment table +
+  live Total/Paid/Outstanding). Retrofitted vendor Purchases with a UTR field
+  end-to-end (model/controller/api/page). Ledger is the shared base T4/T5/T10 attach
+  to. `npm run build` green; `php -l` clean. (cloud run: no deploy)
 
 ---
 
