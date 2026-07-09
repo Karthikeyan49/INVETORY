@@ -9,6 +9,7 @@ import {
 import { statisticsApi, type ActiveOrder } from "@/lib/api/statistics";
 import { getIntelligenceSummary, getInventoryValuation } from "@/lib/api/inventory";
 import { fetchDueStampings, fetchStampingAlerts } from "@/lib/api/stampings";
+import { fetchLowStockSpares } from "@/lib/api/spares";
 import { fetchDueFollowups } from "@/lib/api/followups";
 
 const MONTH_LABELS: Record<string, string> = {
@@ -44,6 +45,7 @@ export default function Dashboard() {
   const { data: invValuation } = useQuery({ queryKey: ["inventory", "valuation"], queryFn: getInventoryValuation });
   const { data: dueStampings } = useQuery({ queryKey: ["stampings", "due"], queryFn: () => fetchDueStampings(30) });
   const { data: stampAlerts } = useQuery({ queryKey: ["stampings", "alerts"], queryFn: () => fetchStampingAlerts(7) });
+  const { data: lowSpares } = useQuery({ queryKey: ["spares", "low-stock"], queryFn: () => fetchLowStockSpares() });
   const { data: dueFollowups } = useQuery({ queryKey: ["followups", "due"], queryFn: () => fetchDueFollowups(0) });
 
   const chartData = useMemo(() => {
@@ -153,6 +155,28 @@ export default function Dashboard() {
               <p className="text-2xl font-bold text-card-foreground">{stampAlerts.counts.pending}</p>
               <p className="text-xs text-muted-foreground">Not done yet</p>
             </div>
+          </div>
+        </Link>
+      )}
+
+      {/* Spare low-stock banner (R6 / T6) — parts at or below reorder level */}
+      {lowSpares && lowSpares.count > 0 && (
+        <Link
+          to="/spares"
+          className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border p-5 shadow-sm transition hover:shadow-md border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-amber-100 dark:bg-amber-900/40">
+              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-card-foreground">Spare parts low on stock</p>
+              <p className="text-xs text-muted-foreground">{lowSpares.count} spare(s) at or below reorder level — reorder now</p>
+            </div>
+          </div>
+          <div className="ml-auto text-center">
+            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{lowSpares.count}</p>
+            <p className="text-xs text-muted-foreground">Below reorder</p>
           </div>
         </Link>
       )}

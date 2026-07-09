@@ -213,7 +213,7 @@ create/list/approve; generate the DCR PDF; connect field visits → leads/quotat
       outstanding widget + Excel/PDF download (R10, R12). *(photo pending — see §5; built
       provisional per instructions)*
 - [x] **T5** Stamping advance → outstanding (R9), rolled into the outstanding widget.
-- [ ] **T6** Spare module: page like Machines + CRUD + low‑stock notification +
+- [x] **T6** Spare module: page like Machines + CRUD + low‑stock notification +
       forecasting (R6).
 - [ ] **T7** Quotation Builder 4‑format selector wired to Sri Vari builders (R2), and
       quotation → Invoice + Delivery Challan conversion (R3).
@@ -277,6 +277,17 @@ and stop.
   stamping api (`updateStampingFee` + fee/outstanding fields) + Stamping page
   (fee/extra/advance/category/UTR on create, Fee + Outstanding columns, embedded
   PaymentLedger dialog). `npm run build` green; `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T6 done**: Spares module (R6). Migration `025_spares.sql` —
+  `spares` (name/part_no/category/quantity/unit/unit_cost/reorder_level/location/
+  notes) + `spare_movements` consumption ledger (idempotent). `Spare` model (CRUD,
+  `move` receive/consume/issue adjusting qty + logging movement, mirrors machine-
+  fitted consumption into MachineMovement, `lowStock`, consumption-based `forecast`
+  → avg daily use / days-to-stockout / suggested reorder). `SpareController`
+  (index/show/store/update/move/destroy + `/spares/low-stock` + `/spares/forecast`),
+  routes registered (literals before `{id}`). Frontend `lib/api/spares.ts` +
+  `pages/inventory/Spares.tsx` (Stock + Forecast tabs, low-stock badge/filter, move
+  dialog with machine link), nav "Spares" under Inventory, route `/spares`, plus a
+  Dashboard low-stock banner. `npm run build` green; `php -l` clean. (cloud run: no deploy)
 
 ---
 
