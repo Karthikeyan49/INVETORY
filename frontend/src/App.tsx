@@ -32,6 +32,7 @@ import Employees from "./pages/Employees";
 import Attendance from "./pages/Attendance";
 import Payroll from "./pages/Payroll";
 import Incentives from "./pages/Incentives";
+import Dcr from "./pages/Dcr";
 import AdvanceRegister from "./pages/AdvanceRegister";
 import Tasks from "./pages/Tasks";
 import Meetings from "./pages/Meetings";
@@ -118,6 +119,7 @@ function ProtectedRoutes() {
         <Route path="/purchase-orders" element={<PurchaseOrders />} />
         <Route path="/stamping" element={<Stamping />} />
         <Route path="/followups" element={<Followups />} />
+        <Route path="/dcr" element={<Dcr />} />
         <Route path="/deliveries" element={<Deliveries />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/procurement" element={<Procurement />} />
