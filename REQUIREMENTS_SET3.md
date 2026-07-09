@@ -215,7 +215,7 @@ create/list/approve; generate the DCR PDF; connect field visits → leads/quotat
 - [x] **T5** Stamping advance → outstanding (R9), rolled into the outstanding widget.
 - [x] **T6** Spare module: page like Machines + CRUD + low‑stock notification +
       forecasting (R6).
-- [ ] **T7** Quotation Builder 4‑format selector wired to Sri Vari builders (R2), and
+- [x] **T7** Quotation Builder 4‑format selector wired to Sri Vari builders (R2), and
       quotation → Invoice + Delivery Challan conversion (R3).
 - [ ] **T8** Delivery Challan carries tax + extra; Invoice shows extra (extended);
       DC→Invoice include‑extra checkbox (extended only) (R4).
@@ -288,6 +288,15 @@ and stop.
   `pages/inventory/Spares.tsx` (Stock + Forecast tabs, low-stock badge/filter, move
   dialog with machine link), nav "Spares" under Inventory, route `/spares`, plus a
   Dashboard low-stock banner. `npm run build` green; `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T7 done**: Quotation 4-format selector + conversions (R2/R3).
+  Migration `026_quotation_kind.sql` adds `quotation_kind` (retail/industrial/
+  service/stamping) to quotations (idempotent); AdminQuotationController validates,
+  persists on store/update. Frontend quotations api gains `QuotationKind` +
+  `QUOTATION_KINDS`; QuotationBuilder gains a "Sri Vari Format" selector, a
+  "Sri Vari PDF" download that maps line items → `buildQuotation(data, kind)` rows
+  per format (service=description rows, others=machine rows), and a
+  "Convert to Delivery Challan" list action (prefilled draft challan, alongside the
+  existing convert-to-invoice). `npm run build` green; `php -l` clean. (cloud run: no deploy)
 
 ---
 
