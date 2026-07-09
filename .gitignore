@@ -1,0 +1,16 @@
+saas-erp/
+
+# Secrets — never commit real env files (keep .env.example)
+.env
+.env.*
+!.env.example
+
+# Build / tool artifacts
+frontend/dist/
+frontend/dist-dealer/
+frontend/graphify-out/
+pdf-template-studio/out/
+node_modules/
+
+# Generated Hostinger deploy bundles
+/*.com/
