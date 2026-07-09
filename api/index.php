@@ -125,6 +125,7 @@ require_once ROOT_PATH . '/models/InventoryMovement.php';
 require_once ROOT_PATH . '/models/InventoryAllocation.php';
 require_once ROOT_PATH . '/models/PurchaseOrder.php';
 require_once ROOT_PATH . '/models/Payment.php';
+require_once ROOT_PATH . '/models/PaymentInstallment.php';
 require_once ROOT_PATH . '/models/SalesDocument.php';
 require_once ROOT_PATH . '/models/TestCertificate.php';
 require_once ROOT_PATH . '/models/GstCompliance.php';
@@ -203,6 +204,7 @@ require_once ROOT_PATH . '/controllers/admin/InventoryIntelligenceController.php
 require_once ROOT_PATH . '/controllers/admin/ReorderIntelligenceController.php';
 require_once ROOT_PATH . '/controllers/admin/InventoryApprovalController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminPaymentController.php';
+require_once ROOT_PATH . '/controllers/admin/AdminInstallmentController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesDocumentController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminQuotationController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminQuotationComponentController.php';
@@ -537,6 +539,11 @@ $router->get('/admin/payments/{id}/receipt',   [AdminPaymentController::class, '
 $router->post('/admin/payments/{id}/void',     [AdminPaymentController::class, 'void'],     'admin:owner,accountant');
 $router->get('/admin/payments/{id}',           [AdminPaymentController::class, 'show'],     'admin');
 $router->get('/admin/receivables/ageing',      [AdminPaymentController::class, 'receivablesAgeing'], 'admin');
+
+// Reusable installment ledger (R12 / T3) — advance + N installments per document
+$router->get('/admin/installments',            [AdminInstallmentController::class, 'index'],   'admin');
+$router->post('/admin/installments',           [AdminInstallmentController::class, 'store'],   'admin:owner,accountant');
+$router->delete('/admin/installments/{id}',    [AdminInstallmentController::class, 'destroy'], 'admin:owner,accountant');
 
 // Admin Sales Billing - Quotations and Proformas
 $router->get('/admin/sales-documents',                 [AdminSalesDocumentController::class, 'index'],        'admin');
