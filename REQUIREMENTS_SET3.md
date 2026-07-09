@@ -219,7 +219,7 @@ create/list/approve; generate the DCR PDF; connect field visits → leads/quotat
       quotation → Invoice + Delivery Challan conversion (R3).
 - [x] **T8** Delivery Challan carries tax + extra; Invoice shows extra (extended);
       DC→Invoice include‑extra checkbox (extended only) (R4).
-- [ ] **T9** Cash Bill trigger on cash‑category invoices / service records (R5).
+- [x] **T9** Cash Bill trigger on cash‑category invoices / service records (R5).
 - [ ] **T10** HR Incentive Payments page + incentive payslip (R7).
 - [ ] **T11** DCR (Daily Call Report) page + PDF (R13).
 - [ ] **T12** Cross‑cutting sweep: confirm `extra_amount` gating is present and correct
@@ -306,6 +306,12 @@ and stop.
   amount" checkbox shown only to the extended login** carries the challan's off-books
   extra onto the invoice. Printed challan PDF intentionally omits off-books figures.
   `npm run build` green. (cloud run: no deploy)
+- 2026-07-09 — **T9 done**: Cash Bill trigger (R5). Wired the existing
+  `downloadCashBill` (Sri Vari cash-bill template) into the Invoices page:
+  `downloadCashBillForInvoice` fetches the full invoice and maps customer/items/
+  qty/amount/total onto `CashBillData`; a "Cash Bill" button appears in the invoice
+  detail dialog only for **Cash** payment-method invoices. `npm run build` green.
+  (cloud run: no deploy)
 
 ---
 
