@@ -142,6 +142,7 @@ require_once ROOT_PATH . '/models/Purchase.php';
 require_once ROOT_PATH . '/models/Funding.php';
 require_once ROOT_PATH . '/models/Stamping.php';
 require_once ROOT_PATH . '/models/Followup.php';
+require_once ROOT_PATH . '/models/Dcr.php';
 require_once ROOT_PATH . '/models/DeliveryNote.php';
 require_once ROOT_PATH . '/helpers/GroqAPI.php';
 require_once ROOT_PATH . '/controllers/AuthController.php';
@@ -181,6 +182,7 @@ require_once ROOT_PATH . '/controllers/admin/AdminEmployeeController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminAttendanceController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminPayrollController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminIncentiveController.php';
+require_once ROOT_PATH . '/controllers/admin/AdminDcrController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminEmployeeAdvanceController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminFaqController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminMeetingController.php';
@@ -799,6 +801,14 @@ $router->get('/admin/incentives/{id}',                [AdminIncentiveController:
 $router->put('/admin/incentives/{id}',                [AdminIncentiveController::class, 'update'],  'admin:owner,accountant,hr');
 $router->post('/admin/incentives/{id}/pay',           [AdminIncentiveController::class, 'pay'],     'admin:owner,accountant,hr');
 $router->delete('/admin/incentives/{id}',             [AdminIncentiveController::class, 'destroy'], 'admin:owner,accountant,hr');
+
+// ─── Admin Daily Call Report (R13 / T11) — field visits → leads
+$router->get('/admin/dcr',                            [AdminDcrController::class, 'index'],    'admin');
+$router->post('/admin/dcr',                           [AdminDcrController::class, 'store'],    'admin:owner,accountant,hr,sales');
+$router->get('/admin/dcr/{id}',                       [AdminDcrController::class, 'show'],     'admin');
+$router->put('/admin/dcr/{id}',                       [AdminDcrController::class, 'update'],   'admin:owner,accountant,hr,sales');
+$router->post('/admin/dcr/{id}/approve',              [AdminDcrController::class, 'approve'],  'admin:owner,accountant,hr');
+$router->delete('/admin/dcr/{id}',                    [AdminDcrController::class, 'destroy'],  'admin:owner,accountant,hr');
 
 // ─── Admin Employee Advances ────────────────────────────────────────────────
 $router->get('/admin/employee-advances',              [AdminEmployeeAdvanceController::class, 'index'],   'admin');

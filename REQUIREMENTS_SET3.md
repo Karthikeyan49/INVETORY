@@ -221,7 +221,7 @@ create/list/approve; generate the DCR PDF; connect field visits → leads/quotat
       DC→Invoice include‑extra checkbox (extended only) (R4).
 - [x] **T9** Cash Bill trigger on cash‑category invoices / service records (R5).
 - [x] **T10** HR Incentive Payments page + incentive payslip (R7).
-- [ ] **T11** DCR (Daily Call Report) page + PDF (R13).
+- [x] **T11** DCR (Daily Call Report) page + PDF (R13).
 - [ ] **T12** Cross‑cutting sweep: confirm `extra_amount` gating is present and correct
       in every payment feature above (R1). Verify standard vs extended totals differ by
       exactly the extra.
@@ -323,6 +323,17 @@ and stop.
   pay dialog posting expense) + `incentivePayslipPdf.ts` payslip, nav "Incentives"
   under HR, route `/incentives`. Separate from fixed payroll. `npm run build` green;
   `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T11 done**: Daily Call Report (R13, F-SVS-01). Migration
+  `028_dcr.sql` — `dcr` + `dcr_lines` (idempotent). `Dcr` model (create/update with
+  lines, auto total_km, **approve seeds follow-ups (leads)** from prospect lines →
+  links dcr_lines.followup_id). `AdminDcrController` (index/show/store/update/approve/
+  destroy), routes (sales/hr/accountant/owner). Frontend `lib/api/dcr.ts` + `Dcr.tsx`
+  (header + full visit-lines editor: customer/address/mobile/model/status/type/
+  category/stamping/service/payment/remarks, approve + lead-seeding, detail view) +
+  `dcrPdf.ts` rendering the F-SVS-01 layout (verified against
+  docs/reference-pdfs/dcr-daily-call-report.pdf columns), nav "Daily Call Report"
+  under Customer Care, route `/dcr`. Field visits → leads wired. `npm run build`
+  green; `php -l` clean. (cloud run: no deploy)
 
 ---
 
