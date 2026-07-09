@@ -222,7 +222,7 @@ create/list/approve; generate the DCR PDF; connect field visits → leads/quotat
 - [x] **T9** Cash Bill trigger on cash‑category invoices / service records (R5).
 - [x] **T10** HR Incentive Payments page + incentive payslip (R7).
 - [x] **T11** DCR (Daily Call Report) page + PDF (R13).
-- [ ] **T12** Cross‑cutting sweep: confirm `extra_amount` gating is present and correct
+- [x] **T12** Cross‑cutting sweep: confirm `extra_amount` gating is present and correct
       in every payment feature above (R1). Verify standard vs extended totals differ by
       exactly the extra.
 
@@ -334,6 +334,21 @@ and stop.
   docs/reference-pdfs/dcr-daily-call-report.pdf columns), nav "Daily Call Report"
   under Customer Care, route `/dcr`. Field visits → leads wired. `npm run build`
   green; `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T12 done**: cross-cutting extra_amount gating sweep (R1). Audited
+  every payment feature — all controllers that expose extra_amount also gate on
+  `tax_view` (isExtended), and all frontend forms/columns render extra only for the
+  extended login: Machines, Purchases (extra=0 for standard on read/write),
+  PO register (`withLedger` unsets extra + grand adds it only if extended), Stamping
+  (`withLedgerRow`), Installment ledger (`grandTotalFor` per ref_type), Delivery
+  Challan (`gateTax` + DC→Invoice include-extra checkbox extended-only), Invoices
+  (Set-2 gating + P&L revenue extra extended-only), Incentives (`gate()` + summary),
+  Outstanding widget (adds extra per source only if extended). Verified by
+  construction: every grand total = `base + (extended ? extra : 0)`, so **standard
+  vs extended totals differ by exactly Σ(extra)**. No leaks found; no code changes
+  required.
+- 2026-07-09 — **SET 3 COMPLETE** — T1–T12 all implemented, built (`npm run build`
+  green) and `php -l` clean, committed and pushed to `origin/autonomous/set3`
+  (PR #1). Cloud run: no deploy (Hostinger credentials are local-only, per plan).
 
 ---
 
