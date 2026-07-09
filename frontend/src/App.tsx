@@ -56,6 +56,7 @@ import InventoryMovements from "./pages/inventory/InventoryMovements";
 import InventoryIntelligence from "./pages/inventory/InventoryIntelligence";
 import InventoryApprovals from "./pages/inventory/InventoryApprovals";
 import CycleCount from "./pages/inventory/CycleCount";
+import Spares from "./pages/inventory/Spares";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -111,6 +112,7 @@ function ProtectedRoutes() {
         <Route path="/machine-issues" element={<MachineIssues />} />
         <Route path="/movements" element={<MachineMovementsLog />} />
         <Route path="/inventory-items" element={<InventoryItems />} />
+        <Route path="/spares" element={<Spares />} />
         <Route path="/purchases" element={<Purchases />} />
         <Route path="/purchase-orders" element={<PurchaseOrders />} />
         <Route path="/stamping" element={<Stamping />} />

@@ -136,6 +136,7 @@ require_once ROOT_PATH . '/models/Machine.php';
 require_once ROOT_PATH . '/models/MachineIssue.php';
 require_once ROOT_PATH . '/models/MachineMovement.php';
 require_once ROOT_PATH . '/models/InventoryItem.php';
+require_once ROOT_PATH . '/models/Spare.php';
 require_once ROOT_PATH . '/models/Purchase.php';
 require_once ROOT_PATH . '/models/Funding.php';
 require_once ROOT_PATH . '/models/Stamping.php';
@@ -153,6 +154,7 @@ require_once ROOT_PATH . '/controllers/DealerWorkspaceController.php';
 require_once ROOT_PATH . '/controllers/MachineController.php';
 require_once ROOT_PATH . '/controllers/MachineIssueController.php';
 require_once ROOT_PATH . '/controllers/InventoryItemController.php';
+require_once ROOT_PATH . '/controllers/SpareController.php';
 require_once ROOT_PATH . '/controllers/PurchaseController.php';
 require_once ROOT_PATH . '/controllers/FundingController.php';
 require_once ROOT_PATH . '/controllers/StampingController.php';
@@ -302,6 +304,16 @@ $router->post('/inventory-items',       [InventoryItemController::class, 'store'
 $router->get('/inventory-items/{id}',   [InventoryItemController::class, 'show'],    true);
 $router->put('/inventory-items/{id}',   [InventoryItemController::class, 'update'],  true);
 $router->delete('/inventory-items/{id}',[InventoryItemController::class, 'destroy'], true);
+
+// Spares — spare-parts stock register with low-stock + forecast (R6 / T6)
+$router->get('/spares/low-stock',       [SpareController::class, 'lowStock'],  true); // before {id}
+$router->get('/spares/forecast',        [SpareController::class, 'forecast'],  true); // before {id}
+$router->get('/spares',                 [SpareController::class, 'index'],     true);
+$router->post('/spares',                [SpareController::class, 'store'],     true);
+$router->get('/spares/{id}',            [SpareController::class, 'show'],       true);
+$router->put('/spares/{id}',            [SpareController::class, 'update'],     true);
+$router->post('/spares/{id}/move',      [SpareController::class, 'move'],       true);
+$router->delete('/spares/{id}',         [SpareController::class, 'destroy'],    true);
 
 // Delivery challans (requirement.txt — lines 6, 8, 14)
 $router->get('/deliveries',              [DeliveryController::class, 'index'],        true);

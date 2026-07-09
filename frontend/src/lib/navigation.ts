@@ -51,6 +51,7 @@ export const sections: MenuSection[] = [
       { title: "Machines",       url: "/machines",       icon: Boxes },
       { title: "Machine Issues", url: "/machine-issues", icon: Wrench },
       { title: "Items",          url: "/inventory-items", icon: PackageCheck },
+      { title: "Spares",         url: "/spares",         icon: Wrench },
       { title: "Stamping",       url: "/stamping",       icon: Stamp },
       { title: "Movements",      url: "/movements", icon: ArrowLeftRight },
     ],
