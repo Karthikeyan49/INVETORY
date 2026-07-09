@@ -95,7 +95,7 @@ export const sections: MenuSection[] = [
     label: "Customer Care",
     items: [
       { title: "Follow-ups", url: "/followups", icon: BellRing },
-      { title: "Complaints", url: "/queries", icon: MessageSquare },
+      { title: "Customer Complaints", url: "/queries", icon: MessageSquare },
     ],
   },
   {

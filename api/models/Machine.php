@@ -9,6 +9,7 @@ class Machine
 {
     public const STATUSES     = ['in_stock', 'reserved', 'on_delivery', 'delivered', 'maintenance'];
     public const PART_STATUS  = ['present', 'missing', 'transferred'];
+    public const TYPES        = ['local', 'brand'];
 
     /** @return array{rows: array, total: int} */
     public static function all(array $filters = [], int $page = 1, int $limit = 20): array
@@ -23,6 +24,10 @@ class Machine
         if (!empty($filters['category'])) {
             $where[] = 'm.category = ?';
             $params[] = (string)$filters['category'];
+        }
+        if (!empty($filters['machine_type']) && in_array($filters['machine_type'], self::TYPES, true)) {
+            $where[] = 'm.machine_type = ?';
+            $params[] = (string)$filters['machine_type'];
         }
         if (!empty($filters['customer_id'])) {
             $where[] = 'm.customer_id = ?';
@@ -66,15 +71,16 @@ class Machine
         $txt = fn($k) => isset($data[$k]) && $data[$k] !== '' ? trim((string)$data[$k]) : null;
         return Database::insert(
             "INSERT INTO machines
-                (code, model, category, accuracy, platform_size, capacity, hsn, customer_id, zone_id, status,
+                (code, model, category, machine_type, accuracy, platform_size, capacity, hsn, customer_id, zone_id, status,
                  purchase_date, invoice_date, stamping_date, sold_date,
                  notes, buy_price, buy_gst_pct, sale_price, sale_gst_pct, tax_amount,
                  extra_amount, extra_from_vendor, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 trim((string)$data['code']),
                 isset($data['model']) ? trim((string)$data['model']) : null,
                 $txt('category'),
+                in_array($data['machine_type'] ?? '', self::TYPES, true) ? $data['machine_type'] : 'brand',
                 $txt('accuracy'),
                 $txt('platform_size'),
                 $txt('capacity'),
@@ -102,7 +108,7 @@ class Machine
     public static function update(int $id, array $data): bool
     {
         $map = [
-            'code' => 'code', 'model' => 'model', 'category' => 'category', 'hsn' => 'hsn',
+            'code' => 'code', 'model' => 'model', 'category' => 'category', 'machine_type' => 'machine_type', 'hsn' => 'hsn',
             'accuracy' => 'accuracy', 'platform_size' => 'platform_size', 'capacity' => 'capacity',
             'customer_id' => 'customer_id', 'zone_id' => 'zone_id',
             'purchase_date' => 'purchase_date', 'invoice_date' => 'invoice_date', 'stamping_date' => 'stamping_date',
@@ -119,7 +125,9 @@ class Machine
                 continue;
             }
             $value = $data[$in];
-            if (in_array($col, ['customer_id', 'zone_id'], true)) {
+            if ($col === 'machine_type') {
+                $value = in_array($value, self::TYPES, true) ? $value : 'brand';
+            } elseif (in_array($col, ['customer_id', 'zone_id'], true)) {
                 $value = $value !== '' && $value !== null ? (int)$value : null;
             } elseif (in_array($col, $numeric, true)) {
                 $value = $value !== '' && $value !== null ? (float)$value : null;

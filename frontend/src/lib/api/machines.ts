@@ -5,6 +5,7 @@
 import { apiFetch } from "./client";
 
 export type MachineStatus = "in_stock" | "reserved" | "on_delivery" | "delivered" | "maintenance";
+export type MachineType = "local" | "brand";
 export type PartStatus = "present" | "missing" | "transferred";
 
 export interface MachinePart {
@@ -30,6 +31,7 @@ export interface Machine {
   code: string;
   model: string | null;
   category: string | null;
+  machine_type?: MachineType;
   accuracy?: string | null;
   platform_size?: string | null;
   capacity?: string | null;
@@ -67,6 +69,7 @@ interface OneResponse { success: boolean; data: Machine; message?: string; }
 export interface MachineFilters {
   status?: MachineStatus | "";
   category?: string;
+  machine_type?: MachineType | "";
   search?: string;
   page?: number;
   limit?: number;
