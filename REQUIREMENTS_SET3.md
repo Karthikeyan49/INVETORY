@@ -28,6 +28,12 @@ ERP. Work like a senior engineer, not a demo author.
 1. `cd` to the repo and `git pull --rebase` (get any prior run's progress).
 2. Read the **Pending Work Checklist** (§3) and **Progress Log** (§4).
 3. Pick the highest‑priority **unchecked** task that is not Blocked.
+3a. **Analyse module interconnections FIRST.** Before writing any code, study how this
+    feature connects to the rest of the system — which existing tables/models it reads or
+    writes, which nav sections it belongs in, and which events it must trigger or react to
+    (see the Module Map in §1a). Design those links up front; **implementing a feature
+    includes wiring its cross‑module integrations.** Never ship an isolated page — the
+    ERP's value is the interlinking.
 4. Implement it **end‑to‑end** and to the quality bar (§0 "Definition of done").
 5. **Test**: `npm run build` (frontend), `php -l` on changed PHP, and for any PDF/
    template change render → `pdftoppm` → eyeball vs `docs/reference-pdfs/`.
@@ -52,6 +58,9 @@ ERP. Work like a senior engineer, not a demo author.
   `frontend/src/lib/navigation.ts`, route in `frontend/src/App.tsx`, charts follow the
   `dataviz` palette when used. No stubs, no `TODO`, no placeholder data.
 - Dual **`tax_view`** gating wherever money/`extra_amount` is involved (see §1).
+- **Interconnection**: the feature's cross‑module links (data + nav + events) from step 3a
+  are built and verified as part of the task — not deferred. A task is not done until its
+  connections to the modules named in §1a / §2 exist and work.
 
 **Safety — NON‑NEGOTIABLE**
 - Make changes **only** in this repo. Deploy **only** inventory.kynetropo.com.
@@ -84,6 +93,33 @@ ERP. Work like a senior engineer, not a demo author.
 - Reference source PDFs live in `docs/reference-pdfs/` (invoice, cash-bill,
   delivery-challan, quotation-{retail,industrial,service,stamping},
   dcr-daily-call-report).
+
+## 1a. Module Map — analyse & preserve/build these connections
+
+**Existing wires (must stay intact — verify after each change):**
+- Machine added → **Expense** ("Machine Purchase") → **P&L / Financial Statements**.
+- Invoice created → **Sales Order** (net of GST); Payment/paid → order paid → **P&L revenue**.
+- Machine (model+category) added → **Inventory Item** qty +1.
+- Machine status / parts / issue changes → **Machine Movements** log (`/movements`).
+- Machine stamping_date → **Stamping** row + **dashboard alerts**.
+- Invoice `extra_amount` (extended login) carried from machine → **P&L includes it**.
+
+**Set‑3 wires to BUILD (each task owns its links):**
+- Quotation (any of the 4 kinds) → convert to **Invoice** and **Delivery Challan**, prefilled [T7].
+- Delivery Challan (carries tax + extra) → convert to **Invoice** with an include‑extra
+  checkbox (extended login only); Invoice can display extra [T8].
+- Payment category = Cash → **Cash Bill** document [T9].
+- Purchase / Purchase Order / Stamping payments (advance + installments) → **outstanding
+  ledger** → single‑page **Total Outstanding** widget → **Finance** [T3, T4, T5].
+- Spare consumption (machine parts / movements) → **Spare stock** decrement →
+  **low‑stock notification** + **forecast** [T6].
+- DCR field visits → **leads** → **Quotation** / **Customer follow‑ups** [T11, T13-rename].
+- Incentive payments → **HR** + **Finance** (expense), extra_amount‑gated [T10].
+- Every payment feature → `extra_amount` (extended‑only) → **Finance** calculations
+  (P&L / Financial Statements) [T12].
+
+When a task touches any node above, wire the edges to/from it in the SAME task and
+re‑verify the existing edges still work.
 
 ---
 
