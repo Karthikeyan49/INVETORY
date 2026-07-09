@@ -1,0 +1,53 @@
+{
+  "name": "Tax Invoice",
+  "mode": "reconstructed",
+  "page": { "format": "a4", "margin": 36 },
+  "brand": [31, 90, 58],
+  "taxMode": "split",
+  "header": {
+    "logo": true,
+    "rightBoxLines": ["GSTIN : {{company.gstin}}", "Ph : {{company.phone}}"]
+  },
+  "title": "TAX INVOICE",
+  "party": {
+    "leftRatio": 0.58,
+    "leftHeading": "Bill To,",
+    "leftBody": ["{{bill_to}}"],
+    "metaRows": [
+      ["Invoice No", "{{invoice_number}}"],
+      ["Date", "{{invoice_date|date}}"],
+      ["Due Date", "{{due_date|date}}"],
+      ["Place of Supply", "{{place_of_supply}}"]
+    ]
+  },
+  "table": {
+    "items": "items",
+    "columns": [
+      { "header": "#", "kind": "serial", "align": "center", "width": 22 },
+      { "header": "Item & Description", "kind": "text", "bind": "name", "align": "left", "width": 118 },
+      { "header": "HSN", "kind": "text", "bind": "hsn", "align": "center", "width": 38 },
+      { "header": "Qty", "kind": "qtyUnit", "align": "right", "width": 34 },
+      { "header": "Rate", "kind": "money", "bind": "rate", "align": "right", "width": 46 },
+      { "header": "Taxable", "kind": "taxable", "align": "right", "width": 54 },
+      { "header": "CGST %", "kind": "gstPct", "half": true, "align": "right", "width": 28 },
+      { "header": "CGST Amt", "kind": "gstAmt", "half": true, "align": "right", "width": 46 },
+      { "header": "SGST %", "kind": "gstPct", "half": true, "align": "right", "width": 28 },
+      { "header": "SGST Amt", "kind": "gstAmt", "half": true, "align": "right", "width": 46 },
+      { "header": "Total", "kind": "lineTotal", "align": "right", "width": 63 }
+    ]
+  },
+  "totals": [
+    { "label": "Taxable Value", "kind": "subtotal" },
+    { "label": "Discount", "kind": "discount" },
+    { "label": "CGST", "kind": "cgst" },
+    { "label": "SGST", "kind": "sgst" },
+    { "label": "IGST", "kind": "igst" },
+    { "label": "Delivery / Freight", "kind": "value", "bind": "delivery_fee" },
+    { "label": "Grand Total", "kind": "grandTotal" }
+  ],
+  "amountInWords": true,
+  "bank": true,
+  "signature": true,
+  "notesField": "terms",
+  "notesHeading": "Terms & Conditions:"
+}

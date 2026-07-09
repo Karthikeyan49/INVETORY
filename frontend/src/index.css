@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Sky/navy BLUE theme — ported from saas-erp (eco-sudar-control) so the
+   Inventory app matches the Kynetropo blue palette. Primary buttons, sidebar
+   active state, rings and accents are all sky-blue. */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 200 70% 52%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 200 45% 96%;
+    --secondary-foreground: 200 70% 40%;
+
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 15% 50%;
+
+    --accent: 200 45% 96%;
+    --accent-foreground: 200 70% 40%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 20% 90%;
+    --input: 214 20% 90%;
+    --ring: 200 70% 52%;
+
+    --radius: 0.75rem;
+
+    --sidebar-bg: 204 56% 97%;
+    --sidebar-fg: 222 47% 11%;
+    --sidebar-active: 200 70% 52%;
+    --sidebar-hover: 200 45% 92%;
+
+    --status-delivered: 152 60% 40%;
+    --status-processing: 45 90% 50%;
+    --status-shipped: 210 70% 55%;
+    --status-pending: 220 10% 60%;
+    --status-confirmed: 240 60% 55%;
+    --status-out-for-delivery: 30 90% 52%;
+    --status-cancelled: 0 72% 51%;
+    --status-returned: 280 55% 52%;
+
+    /* Kynetropo sky/navy sidebar palette (sidebar-scoped tokens only) */
+    --sidebar-background: 204 56% 97%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 200 70% 52%;          /* active item background */
+    --sidebar-primary-foreground: 0 0% 100%; /* active item text */
+    --sidebar-accent: 200 45% 92%;           /* hover background */
+    --sidebar-accent-foreground: 200 70% 36%;
+    --sidebar-border: 204 35% 88%;           /* internal divider */
+    --sidebar-ring: 200 70% 52%;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 40% 14%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 40% 14%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 200 70% 52%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 217 33% 20%;
+    --secondary-foreground: 200 85% 72%;
+
+    --muted: 217 33% 18%;
+    --muted-foreground: 215 20% 68%;
+
+    --accent: 217 33% 20%;
+    --accent-foreground: 200 85% 72%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 217 28% 24%;
+    --input: 217 28% 24%;
+    --ring: 200 70% 52%;
+
+    --sidebar-bg: 222 47% 9%;
+    --sidebar-fg: 210 40% 98%;
+    --sidebar-active: 200 70% 52%;
+    --sidebar-hover: 217 33% 20%;
+    --sidebar-background: 222 47% 9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 200 70% 52%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 20%;
+    --sidebar-accent-foreground: 200 85% 72%;
+    --sidebar-border: 217 28% 24%;
+    --sidebar-ring: 200 70% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+/* Floating scrollbar bar — webkit custom thumb */
+.eco-float-scroll::-webkit-scrollbar        { height: 8px; }
+.eco-float-scroll::-webkit-scrollbar-track  { background: transparent; }
+.eco-float-scroll::-webkit-scrollbar-thumb  {
+  background: rgba(0,0,0,0.30);
+  border-radius: 9999px;
+}
+.eco-float-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.50);
+}

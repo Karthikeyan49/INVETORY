@@ -1,0 +1,50 @@
+{
+  "name": "Performa Invoice / Quotation",
+  "mode": "reconstructed",
+  "page": { "format": "a4", "margin": 36 },
+  "brand": [31, 90, 58],
+  "taxMode": "none",
+  "header": {
+    "logo": true,
+    "rightBoxLines": ["GSTIN : {{company.gstin}}", "Ph : {{company.phone}}"]
+  },
+  "title": "PERFORMA INVOICE",
+  "subtitleField": "{{system_title}}",
+  "party": {
+    "leftRatio": 0.58,
+    "leftHeading": "To,",
+    "leftBody": ["M/S {{customer_name}}", "{{customer_address}}", "GST NO : {{customer_gstin}}"],
+    "rightHeading": "Kindly Attached,",
+    "rightBody": ["{{customer_contact}}", "PH-{{customer_contact_phone}}"],
+    "metaRows": [
+      ["Reference No", "{{reference_no}}"],
+      ["Date", "{{quotation_date|date}}"],
+      ["From", "{{prepared_by_name}}"],
+      ["Designation", "{{prepared_by_designation}}"],
+      ["Phone", "{{prepared_by_phone}}"]
+    ]
+  },
+  "table": {
+    "items": "items",
+    "componentsIntoColumn": 2,
+    "columns": [
+      { "header": "S.No", "kind": "serial", "align": "center", "width": 28 },
+      { "header": "Item Description", "kind": "text", "bind": "name", "align": "left", "width": 150 },
+      { "header": "Specifications", "kind": "text", "bind": "specifications", "align": "left", "width": 150 },
+      { "header": "Quantity (No)", "kind": "qtyUnit", "align": "right", "width": 60 },
+      { "header": "Unit Rate (INR)", "kind": "money", "bind": "rate", "align": "right", "width": 65 },
+      { "header": "Total Cost (INR)", "kind": "taxable", "align": "right", "width": 70 }
+    ]
+  },
+  "totals": [
+    { "label": "Total Basic price", "kind": "subtotal" },
+    { "label": "GST", "kind": "gstGroups" },
+    { "label": "Total Cost of the System", "kind": "grandTotal" }
+  ],
+  "amountInWords": true,
+  "deduction": true,
+  "bank": true,
+  "signature": true,
+  "notesField": "terms",
+  "notesHeading": "Note:"
+}

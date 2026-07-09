@@ -1,0 +1,45 @@
+{
+  "displayName": "Inventory Management System",
+  "compactName": "InventorySystem",
+  "legalName": "Inventory Management System",
+  "division": "Inventory & Stamping Management",
+  "primaryColor": "#2563eb",
+  "stem": "inventory",
+  "kebab": "inventory",
+  "qrPrefix": "INV",
+  "poPrefix": "INV-PO",
+  "business": {
+    "description": "weighing machine dealership and stamping services",
+    "productsLine": "weighing machines and spare parts",
+    "tagline": "Inventory & Stamping Management"
+  },
+  "contact": {
+    "address": "India",
+    "gstin": "N/A"
+  },
+  "bank": {
+    "accountName": "N/A",
+    "accountNo": "N/A",
+    "ifsc": "N/A",
+    "branchLine": "N/A"
+  },
+  "domains": {
+    "apiBaseUrl": "/api"
+  },
+  "database": {
+    "name": "u952547820_inventory",
+    "user": "u952547820_inventory",
+    "applyToEnv": false
+  },
+  "deploy": {
+    "sftpRemotePath": "/domains/inventory.kynetropo.com/public_html",
+    "applyToSftp": false
+  },
+  "admin": {
+    "name": "Administrator",
+    "email": "admin@inventory.kynetropo.com",
+    "phone": "",
+    "staffRole": "owner",
+    "passwordHash": "$2y$12$8UMtC4vfzjpMWnjBz7fyFOFsSkHy2KB9VpUP09ke0L/Zccc9/I.tC"
+  }
+}
