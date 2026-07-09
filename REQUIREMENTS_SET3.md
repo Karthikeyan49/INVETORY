@@ -203,8 +203,8 @@ create/list/approve; generate the DCR PDF; connect field visits → leads/quotat
 
 ## 3. Pending Work Checklist (priority order — tick as done)
 
-- [ ] **T1** Rename "Complaints" → "Customer Complaints" (R8). *(quick)*
-- [ ] **T2** Machine `local` vs `brand` option + filter (R11). *(quick)*
+- [x] **T1** Rename "Complaints" → "Customer Complaints" (R8). *(quick)*
+- [x] **T2** Machine `local` vs `brand` option + filter (R11). *(quick)*
 - [ ] **T3** Payment core: category dropdown (Bank/Cash/UPI) + UTR field + multi‑installment
       ledger + live outstanding, as a reusable pattern (R12). Retrofit existing
       Purchases/Payments to it.
@@ -235,6 +235,12 @@ and stop.
 - 2026-07-10 — Plan created; 8 reference PDFs added to `docs/reference-pdfs/`; PDF
   templates (invoice/cash-bill/DC/4 quotations) already built, wired (except Cash Bill
   trigger) and deployed. Checklist T1–T12 pending.
+- 2026-07-09 — **T1 done**: nav label + Queries page heading "Complaints" → "Customer
+  Complaints". **T2 done**: added `machine_type` (`local`|`brand`) — migration
+  `021_machine_type.sql` (idempotent, default `brand`), Machine model create/update/
+  filter, MachineController store/update `only()` + index filter, machines API
+  type/filter, Machines page form selector + list filter + Type column badge. Frontend
+  `npm run build` green; `php -l` clean on Machine model + controller. (cloud run: no deploy)
 
 ---
 

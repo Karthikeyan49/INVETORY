@@ -78,7 +78,7 @@ export default function Queries() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-card-foreground">Complaints</h1>
+          <h1 className="text-2xl font-bold text-card-foreground">Customer Complaints</h1>
           <p className="text-muted-foreground text-sm mt-1">Manage customer complaints submitted from the mobile app</p>
         </div>
       </div>
