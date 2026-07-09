@@ -18,6 +18,13 @@ export interface Stamping {
   quarter: string | null;
   status: StampingStatus;
   notes: string | null;
+  // Fee + outstanding (R9 / T5) — populated by the API, tax_view-gated
+  total_amount?: number;
+  extra_amount?: number;      // extended login only
+  grand_total?: number;
+  amount_paid?: number;
+  outstanding?: number;
+  payment_status?: "unpaid" | "partial" | "paid";
 }
 
 interface Pagination { page: number; limit: number; total: number; total_pages: number; }
@@ -68,4 +75,12 @@ export async function renewStamping(id: number, stamp_date?: string): Promise<vo
 
 export async function setStampingStatus(id: number, status: StampingStatus): Promise<void> {
   await apiFetch(`/stampings/${id}/status`, { method: "PUT", body: JSON.stringify({ status }) });
+}
+
+export async function updateStampingFee(
+  id: number,
+  data: { total_amount?: number; extra_amount?: number },
+): Promise<Stamping> {
+  const res = await apiFetch<OneResponse>(`/stampings/${id}/fee`, { method: "PUT", body: JSON.stringify(data) });
+  return res.data;
 }

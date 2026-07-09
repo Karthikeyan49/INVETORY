@@ -276,6 +276,7 @@ $router->get('/stampings/alerts',        [StampingController::class, 'alerts'], 
 $router->post('/stampings',              [StampingController::class, 'store'],        true);
 $router->put('/stampings/{id}/renew',    [StampingController::class, 'renew'],        true);
 $router->put('/stampings/{id}/status',   [StampingController::class, 'updateStatus'], true);
+$router->put('/stampings/{id}/fee',      [StampingController::class, 'updateFee'],    true);
 
 // Machine Issues — service / fault tracking
 $router->get('/machine-issues',              [MachineIssueController::class, 'index'],   true);
