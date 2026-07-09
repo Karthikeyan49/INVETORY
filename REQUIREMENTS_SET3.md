@@ -212,7 +212,7 @@ create/list/approve; generate the DCR PDF; connect field visits → leads/quotat
       credit + extra_amount (extended‑only), payment category + UTR, single‑page total
       outstanding widget + Excel/PDF download (R10, R12). *(photo pending — see §5; built
       provisional per instructions)*
-- [ ] **T5** Stamping advance → outstanding (R9), rolled into the outstanding widget.
+- [x] **T5** Stamping advance → outstanding (R9), rolled into the outstanding widget.
 - [ ] **T6** Spare module: page like Machines + CRUD + low‑stock notification +
       forecasting (R6).
 - [ ] **T7** Quotation Builder 4‑format selector wired to Sri Vari builders (R2), and
@@ -267,6 +267,16 @@ and stop.
   PaymentLedger, Total Outstanding widget with Excel/PDF download), nav entry under
   Purchase, route `/purchase-orders`. Layout marked provisional pending the promised
   photo (§5). `npm run build` green; `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T5 done**: Stamping fee + outstanding (R9). Migration
+  `024_stamping_outstanding.sql` adds `total_amount` + `extra_amount` to stampings
+  (idempotent). Stamping model create records fee/extra + optional advance via the
+  shared ledger (ref_type `stamping`); `updateFee`, `attachLedger`/`withLedgerRow`
+  compute tax-gated paid/outstanding. StampingController gates extra, enriches
+  list/create responses, new `PUT /stampings/{id}/fee`. Outstanding already rolls
+  into the T4 `/admin/outstanding` widget (reads stampings defensively). Frontend
+  stamping api (`updateStampingFee` + fee/outstanding fields) + Stamping page
+  (fee/extra/advance/category/UTR on create, Fee + Outstanding columns, embedded
+  PaymentLedger dialog). `npm run build` green; `php -l` clean. (cloud run: no deploy)
 
 ---
 

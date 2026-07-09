@@ -6,6 +6,11 @@ declare(strict_types=1);
  */
 class StampingController
 {
+    private static function isExtended(Request $request): bool
+    {
+        return strtolower((string)($request->user['tax_view'] ?? 'standard')) === 'extended';
+    }
+
     // GET /stampings
     public function index(Request $request): void
     {
@@ -17,6 +22,7 @@ class StampingController
             'search'     => $request->query('search'),
         ];
         $result = Stamping::all($filters, $page, $limit);
+        $result['rows'] = Stamping::attachLedger($result['rows'], self::isExtended($request));
         Response::paginated($result['rows'], [
             'page'        => $page,
             'limit'       => $limit,
@@ -43,13 +49,33 @@ class StampingController
     {
         $data = $request->only([
             'machine_id', 'customer_id', 'certificate_no', 'stamp_date', 'expiry_date', 'quarter', 'status', 'notes',
+            'total_amount', 'extra_amount', 'advance', 'payment_category', 'utr_no',
         ]);
         if (empty($data['machine_id'])) {
             Response::error('machine_id is required', 422);
         }
+        // Off-books extra is extended-login only.
+        if (!self::isExtended($request)) {
+            unset($data['extra_amount']);
+        }
         $data['created_by'] = $request->user['user_id'] ?? null;
         $id = Stamping::create($data);
-        Response::success(Stamping::find($id), 'Stamping recorded', 201);
+        Response::success(Stamping::withLedgerRow(Stamping::find($id), self::isExtended($request)), 'Stamping recorded', 201);
+    }
+
+    // PUT /stampings/{id}/fee  — set the stamping fee / off-books extra (R9)
+    public function updateFee(Request $request): void
+    {
+        $id = (int)$request->param('id');
+        if (!Stamping::find($id)) {
+            Response::error('Stamping not found', 404);
+        }
+        $data = $request->only(['total_amount', 'extra_amount']);
+        if (!self::isExtended($request)) {
+            unset($data['extra_amount']);
+        }
+        Stamping::updateFee($id, $data);
+        Response::success(Stamping::withLedgerRow(Stamping::find($id), self::isExtended($request)), 'Stamping fee updated');
     }
 
     // PUT /stampings/{id}/renew

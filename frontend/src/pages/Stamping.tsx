@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, Stamp, AlertTriangle, RefreshCw } from "lucide-react";
+import { Plus, Search, Stamp, AlertTriangle, RefreshCw, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,11 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
+import PaymentLedger from "@/components/PaymentLedger";
+import { PAYMENT_CATEGORIES } from "@/lib/api/installments";
 import {
   fetchStampings, createStamping, renewStamping, STAMP_LABELS,
   type Stamping as StampingRow, type StampingStatus,
 } from "@/lib/api/stampings";
 import { fetchMachines, type Machine } from "@/lib/api/machines";
+
+const money = (v: number | string | null | undefined) =>
+  v == null || v === "" ? "—" : `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
 const STATUSES: StampingStatus[] = ["pending", "stamped", "due", "expired", "renewed"];
 
@@ -24,10 +30,16 @@ const statusClass: Record<StampingStatus, string> = {
   renewed: "bg-blue-100 text-blue-700",
 };
 
-const emptyForm = { machine_id: "", certificate_no: "", stamp_date: "", notes: "" };
+const emptyForm = {
+  machine_id: "", certificate_no: "", stamp_date: "", notes: "",
+  total_amount: "", extra_amount: "", advance: "", payment_category: "Cash", utr_no: "",
+};
 
 export default function Stamping() {
+  const { taxView } = useAuth();
+  const extended = taxView === "extended";
   const [rows, setRows] = useState<StampingRow[]>([]);
+  const [payFor, setPayFor] = useState<StampingRow | null>(null);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -62,7 +74,17 @@ export default function Stamping() {
     if (!form.machine_id) { toast.error("Select a machine"); return; }
     setSaving(true);
     try {
-      await createStamping({ ...form, machine_id: Number(form.machine_id) });
+      await createStamping({
+        machine_id: Number(form.machine_id),
+        certificate_no: form.certificate_no || undefined,
+        stamp_date: form.stamp_date || undefined,
+        notes: form.notes || undefined,
+        total_amount: Number(form.total_amount) || 0,
+        ...(extended ? { extra_amount: Number(form.extra_amount) || 0 } : {}),
+        advance: Number(form.advance) || 0,
+        payment_category: form.payment_category,
+        utr_no: form.utr_no || undefined,
+      } as Partial<StampingRow> & Record<string, unknown>);
       toast.success("Stamping recorded");
       setAddOpen(false);
       setForm(emptyForm);
@@ -124,6 +146,35 @@ export default function Stamping() {
                 <label className="text-xs text-muted-foreground">Stamp date (renewal = +1 year)</label>
                 <Input type="date" value={form.stamp_date} onChange={(e) => setForm({ ...form, stamp_date: e.target.value })} />
               </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Stamping fee</label>
+                  <Input type="number" min="0" placeholder="0.00" value={form.total_amount} onChange={(e) => setForm({ ...form, total_amount: e.target.value })} />
+                </div>
+                {extended && (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Extra (off-books)</label>
+                    <Input type="number" min="0" placeholder="0.00" value={form.extra_amount} onChange={(e) => setForm({ ...form, extra_amount: e.target.value })} />
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Advance paid</label>
+                  <Input type="number" min="0" placeholder="0.00" value={form.advance} onChange={(e) => setForm({ ...form, advance: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Category</label>
+                  <Select value={form.payment_category} onValueChange={(v) => setForm({ ...form, payment_category: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{PAYMENT_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">UTR / Ref</label>
+                  <Input value={form.utr_no} onChange={(e) => setForm({ ...form, utr_no: e.target.value })} />
+                </div>
+              </div>
               <Textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
             <DialogFooter>
@@ -176,28 +227,39 @@ export default function Stamping() {
           <thead className="bg-muted/50">
             <tr className="text-left">
               <th className="p-3">Machine</th><th className="p-3">Certificate</th><th className="p-3">Stamped</th>
-              <th className="p-3">Renewal Due</th><th className="p-3">Quarter</th><th className="p-3">Status</th><th className="p-3"></th>
+              <th className="p-3">Renewal Due</th><th className="p-3">Fee</th><th className="p-3">Outstanding</th>
+              <th className="p-3">Status</th><th className="p-3"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td className="p-4 text-muted-foreground" colSpan={7}>Loading…</td></tr>
+              <tr><td className="p-4 text-muted-foreground" colSpan={8}>Loading…</td></tr>
             ) : visibleRows.length === 0 ? (
-              <tr><td className="p-4 text-muted-foreground" colSpan={7}>No stampings yet. Selling/delivering a machine auto-creates one.</td></tr>
+              <tr><td className="p-4 text-muted-foreground" colSpan={8}>No stampings yet. Selling/delivering a machine auto-creates one.</td></tr>
             ) : visibleRows.map((r) => (
               <tr key={r.id} className="border-t">
                 <td className="p-3 font-medium">{r.machine_code ?? `#${r.machine_id}`}<div className="text-xs text-muted-foreground">{r.machine_model}</div></td>
                 <td className="p-3">{r.certificate_no || "—"}</td>
                 <td className="p-3">{r.stamp_date || "—"}</td>
                 <td className="p-3">{r.expiry_date || "—"}</td>
-                <td className="p-3">{r.quarter || "—"}</td>
+                <td className="p-3">{money(r.grand_total ?? r.total_amount)}</td>
+                <td className="p-3">
+                  {(r.outstanding ?? 0) > 0.005
+                    ? <span className="text-red-700 font-medium">{money(r.outstanding)}</span>
+                    : <span className="text-green-700">Paid</span>}
+                </td>
                 <td className="p-3"><span className={`text-xs px-2 py-0.5 rounded ${statusClass[r.status]}`}>{STAMP_LABELS[r.status]}</span></td>
                 <td className="p-3">
-                  {(r.status === "due" || r.status === "expired" || r.status === "stamped") && (
-                    <Button size="sm" variant="outline" onClick={() => openRenew(r)}>
-                      <RefreshCw className="h-3.5 w-3.5 mr-1" /> Renew
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setPayFor(r)}>
+                      <Wallet className="h-3.5 w-3.5 mr-1" /> Payments
                     </Button>
-                  )}
+                    {(r.status === "due" || r.status === "expired" || r.status === "stamped") && (
+                      <Button size="sm" variant="outline" onClick={() => openRenew(r)}>
+                        <RefreshCw className="h-3.5 w-3.5 mr-1" /> Renew
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -220,6 +282,14 @@ export default function Stamping() {
             <Button variant="outline" onClick={() => setRenewFor(null)}>Cancel</Button>
             <Button onClick={confirmRenew}>Confirm renewal</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment ledger — stamping advance + installments → outstanding */}
+      <Dialog open={!!payFor} onOpenChange={(o) => { if (!o) { setPayFor(null); load(); } }}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader><DialogTitle>Stamping payments — {payFor?.machine_code ?? `#${payFor?.machine_id}`}</DialogTitle></DialogHeader>
+          {payFor && <PaymentLedger refType="stamping" refId={payFor.id} />}
         </DialogContent>
       </Dialog>
     </div>
