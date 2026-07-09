@@ -87,6 +87,10 @@ class AdminInstallmentController
                     if (!$r) return 0.0;
                     $extra = self::columnValue('purchase_orders', 'extra_amount', 'po_id', $refId);
                     return round((float)$r['total'] + ($extended ? $extra : 0.0), 2);
+                case 'po_register':
+                    $r = Database::fetch("SELECT total, extra_amount FROM po_register WHERE id = ? LIMIT 1", [$refId]);
+                    if (!$r) return 0.0;
+                    return round((float)$r['total'] + ($extended ? (float)($r['extra_amount'] ?? 0) : 0.0), 2);
                 case 'stamping':
                     // stamping totals land in T5; read defensively.
                     $amt = self::columnValue('stampings', 'total_amount', 'id', $refId);

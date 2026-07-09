@@ -68,6 +68,7 @@ export const sections: MenuSection[] = [
     label: "Purchase",
     items: [
       { title: "Purchases", url: "/purchases", icon: Store },
+      { title: "Purchase Orders", url: "/purchase-orders", icon: FileStack },
       { title: "Expenses", url: "/expenses", icon: Wallet },
     ],
   },

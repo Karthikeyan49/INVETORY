@@ -126,6 +126,7 @@ require_once ROOT_PATH . '/models/InventoryAllocation.php';
 require_once ROOT_PATH . '/models/PurchaseOrder.php';
 require_once ROOT_PATH . '/models/Payment.php';
 require_once ROOT_PATH . '/models/PaymentInstallment.php';
+require_once ROOT_PATH . '/models/PoRegister.php';
 require_once ROOT_PATH . '/models/SalesDocument.php';
 require_once ROOT_PATH . '/models/TestCertificate.php';
 require_once ROOT_PATH . '/models/GstCompliance.php';
@@ -205,6 +206,7 @@ require_once ROOT_PATH . '/controllers/admin/ReorderIntelligenceController.php';
 require_once ROOT_PATH . '/controllers/admin/InventoryApprovalController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminPaymentController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminInstallmentController.php';
+require_once ROOT_PATH . '/controllers/admin/AdminPoRegisterController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesDocumentController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminQuotationController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminQuotationComponentController.php';
@@ -544,6 +546,14 @@ $router->get('/admin/receivables/ageing',      [AdminPaymentController::class, '
 $router->get('/admin/installments',            [AdminInstallmentController::class, 'index'],   'admin');
 $router->post('/admin/installments',           [AdminInstallmentController::class, 'store'],   'admin:owner,accountant');
 $router->delete('/admin/installments/{id}',    [AdminInstallmentController::class, 'destroy'], 'admin:owner,accountant');
+
+// Purchase Order register (R10 / T4) + single-page Total Outstanding widget
+$router->get('/admin/outstanding',             [AdminPoRegisterController::class, 'outstanding'], 'admin'); // before {id}
+$router->get('/admin/po-register',             [AdminPoRegisterController::class, 'index'],    'admin');
+$router->post('/admin/po-register',            [AdminPoRegisterController::class, 'store'],    'admin:owner,accountant');
+$router->get('/admin/po-register/{id}',        [AdminPoRegisterController::class, 'show'],     'admin');
+$router->put('/admin/po-register/{id}',        [AdminPoRegisterController::class, 'update'],   'admin:owner,accountant');
+$router->delete('/admin/po-register/{id}',     [AdminPoRegisterController::class, 'destroy'],  'admin:owner,accountant');
 
 // Admin Sales Billing - Quotations and Proformas
 $router->get('/admin/sales-documents',                 [AdminSalesDocumentController::class, 'index'],        'admin');

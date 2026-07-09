@@ -208,9 +208,10 @@ create/list/approve; generate the DCR PDF; connect field visits → leads/quotat
 - [x] **T3** Payment core: category dropdown (Bank/Cash/UPI) + UTR field + multi‑installment
       ledger + live outstanding, as a reusable pattern (R12). Retrofit existing
       Purchases/Payments to it.
-- [ ] **T4** Purchase Order register page: by‑category, advance/paid/outstanding,
+- [x] **T4** Purchase Order register page: by‑category, advance/paid/outstanding,
       credit + extra_amount (extended‑only), payment category + UTR, single‑page total
-      outstanding widget + Excel/PDF download (R10, R12). *(photo pending — see §5)*
+      outstanding widget + Excel/PDF download (R10, R12). *(photo pending — see §5; built
+      provisional per instructions)*
 - [ ] **T5** Stamping advance → outstanding (R9), rolled into the outstanding widget.
 - [ ] **T6** Spare module: page like Machines + CRUD + low‑stock notification +
       forecasting (R6).
@@ -254,6 +255,18 @@ and stop.
   live Total/Paid/Outstanding). Retrofitted vendor Purchases with a UTR field
   end-to-end (model/controller/api/page). Ledger is the shared base T4/T5/T10 attach
   to. `npm run build` green; `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T4 done (provisional)**: Purchase Order register (R10). New
+  `po_register` + `po_register_items` tables (migration `023_po_register.sql`,
+  idempotent). `PoRegister` model (items→taxable/gst/total, advance via ledger).
+  `AdminPoRegisterController` CRUD with extra_amount gating + live paid/outstanding
+  from the shared ledger (ref_type `po_register`, added to REF_TYPES + grandTotalFor).
+  New **`GET /admin/outstanding`** aggregate summing outstanding across PO
+  register + credit purchases + stamping (tax-gated), powering the single-page
+  Total Outstanding widget. Frontend `lib/api/poRegister.ts` + `PurchaseOrders.tsx`
+  page (by-category filter, items, extra gating, payment category + UTR, embedded
+  PaymentLedger, Total Outstanding widget with Excel/PDF download), nav entry under
+  Purchase, route `/purchase-orders`. Layout marked provisional pending the promised
+  photo (§5). `npm run build` green; `php -l` clean. (cloud run: no deploy)
 
 ---
 
