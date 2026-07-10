@@ -13,6 +13,7 @@ import MachineIssues from "./pages/MachineIssues";
 import MachineMovementsLog from "./pages/MachineMovementsLog";
 import InventoryItems from "./pages/InventoryItems";
 import Purchases from "./pages/Purchases";
+import PurchaseOrders from "./pages/PurchaseOrders";
 import Stamping from "./pages/Stamping";
 import Followups from "./pages/Followups";
 import Deliveries from "./pages/Deliveries";
@@ -30,6 +31,8 @@ import Reports from "./pages/Reports";
 import Employees from "./pages/Employees";
 import Attendance from "./pages/Attendance";
 import Payroll from "./pages/Payroll";
+import Incentives from "./pages/Incentives";
+import Dcr from "./pages/Dcr";
 import AdvanceRegister from "./pages/AdvanceRegister";
 import Tasks from "./pages/Tasks";
 import Meetings from "./pages/Meetings";
@@ -55,6 +58,7 @@ import InventoryMovements from "./pages/inventory/InventoryMovements";
 import InventoryIntelligence from "./pages/inventory/InventoryIntelligence";
 import InventoryApprovals from "./pages/inventory/InventoryApprovals";
 import CycleCount from "./pages/inventory/CycleCount";
+import Spares from "./pages/inventory/Spares";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -110,9 +114,12 @@ function ProtectedRoutes() {
         <Route path="/machine-issues" element={<MachineIssues />} />
         <Route path="/movements" element={<MachineMovementsLog />} />
         <Route path="/inventory-items" element={<InventoryItems />} />
+        <Route path="/spares" element={<Spares />} />
         <Route path="/purchases" element={<Purchases />} />
+        <Route path="/purchase-orders" element={<PurchaseOrders />} />
         <Route path="/stamping" element={<Stamping />} />
         <Route path="/followups" element={<Followups />} />
+        <Route path="/dcr" element={<Dcr />} />
         <Route path="/deliveries" element={<Deliveries />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/procurement" element={<Procurement />} />
@@ -134,6 +141,7 @@ function ProtectedRoutes() {
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/hr-compliance" element={<HrCompliance />} />
         <Route path="/payroll" element={<Payroll />} />
+        <Route path="/incentives" element={<Incentives />} />
         <Route path="/advance-register" element={<AdvanceRegister />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/meetings" element={<Meetings />} />

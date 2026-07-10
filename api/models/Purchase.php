@@ -83,8 +83,8 @@ class Purchase
         return Database::insert(
             "INSERT INTO purchases
                 (purchase_no, vendor_name, location, purchase_type, taxable, gst_pct, gst_amount,
-                 extra_amount, total, advance, amount_paid, payment_method, purchase_date, notes, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 extra_amount, total, advance, amount_paid, payment_method, utr_no, purchase_date, notes, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 self::nextNo(),
                 trim((string)$data['vendor_name']),
@@ -92,6 +92,7 @@ class Purchase
                 $type,
                 $taxable, $gstPct, $gst, $extra, $total, $advance, $paid,
                 isset($data['payment_method']) && $data['payment_method'] !== '' ? (string)$data['payment_method'] : null,
+                isset($data['utr_no']) && $data['utr_no'] !== '' ? trim((string)$data['utr_no']) : null,
                 !empty($data['purchase_date']) ? (string)$data['purchase_date'] : null,
                 isset($data['notes']) && $data['notes'] !== '' ? trim((string)$data['notes']) : null,
                 !empty($data['created_by']) ? (int)$data['created_by'] : null,
@@ -117,12 +118,13 @@ class Purchase
         Database::execute(
             "UPDATE purchases SET vendor_name = ?, location = ?, purchase_type = ?, taxable = ?, gst_pct = ?,
                     gst_amount = ?, extra_amount = ?, total = ?, advance = ?, amount_paid = ?,
-                    payment_method = ?, purchase_date = ?, notes = ? WHERE id = ?",
+                    payment_method = ?, utr_no = ?, purchase_date = ?, notes = ? WHERE id = ?",
             [
                 array_key_exists('vendor_name', $data) ? trim((string)$data['vendor_name']) : $existing['vendor_name'],
                 array_key_exists('location', $data) ? (trim((string)$data['location']) ?: null) : $existing['location'],
                 $type, $taxable, $gstPct, $gst, $extra, $total, $advance, $paid,
                 array_key_exists('payment_method', $data) ? ((string)$data['payment_method'] ?: null) : $existing['payment_method'],
+                array_key_exists('utr_no', $data) ? (trim((string)$data['utr_no']) ?: null) : ($existing['utr_no'] ?? null),
                 array_key_exists('purchase_date', $data) ? ((string)$data['purchase_date'] ?: null) : $existing['purchase_date'],
                 array_key_exists('notes', $data) ? (trim((string)$data['notes']) ?: null) : $existing['notes'],
                 $id,

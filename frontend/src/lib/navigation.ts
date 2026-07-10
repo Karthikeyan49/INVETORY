@@ -51,6 +51,7 @@ export const sections: MenuSection[] = [
       { title: "Machines",       url: "/machines",       icon: Boxes },
       { title: "Machine Issues", url: "/machine-issues", icon: Wrench },
       { title: "Items",          url: "/inventory-items", icon: PackageCheck },
+      { title: "Spares",         url: "/spares",         icon: Wrench },
       { title: "Stamping",       url: "/stamping",       icon: Stamp },
       { title: "Movements",      url: "/movements", icon: ArrowLeftRight },
     ],
@@ -68,6 +69,7 @@ export const sections: MenuSection[] = [
     label: "Purchase",
     items: [
       { title: "Purchases", url: "/purchases", icon: Store },
+      { title: "Purchase Orders", url: "/purchase-orders", icon: FileStack },
       { title: "Expenses", url: "/expenses", icon: Wallet },
     ],
   },
@@ -88,6 +90,7 @@ export const sections: MenuSection[] = [
       { title: "Employees", url: "/employees", icon: Contact2 },
       { title: "Attendance", url: "/attendance", icon: ClipboardCheck },
       { title: "Payroll", url: "/payroll", icon: BadgeIndianRupee },
+      { title: "Incentives", url: "/incentives", icon: BadgeIndianRupee },
       { title: "Advance Register", url: "/advance-register", icon: Wallet },
     ],
   },
@@ -95,7 +98,8 @@ export const sections: MenuSection[] = [
     label: "Customer Care",
     items: [
       { title: "Follow-ups", url: "/followups", icon: BellRing },
-      { title: "Complaints", url: "/queries", icon: MessageSquare },
+      { title: "Daily Call Report", url: "/dcr", icon: ClipboardCheck },
+      { title: "Customer Complaints", url: "/queries", icon: MessageSquare },
     ],
   },
   {

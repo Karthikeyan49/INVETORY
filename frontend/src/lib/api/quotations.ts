@@ -24,6 +24,14 @@ export type QuotationItem = {
 
 export type QuotationStatus = "Draft" | "Sent" | "Accepted" | "Rejected";
 
+export type QuotationKind = "retail" | "industrial" | "service" | "stamping";
+export const QUOTATION_KINDS: { value: QuotationKind; label: string }[] = [
+  { value: "retail", label: "Retail (product selling)" },
+  { value: "industrial", label: "Industrial" },
+  { value: "service", label: "Service" },
+  { value: "stamping", label: "Stamping" },
+];
+
 export type QuotationListRow = {
   quotation_id: number;
   quotation_no: string;
@@ -32,6 +40,7 @@ export type QuotationListRow = {
   reference_no: string | null;
   system_title: string | null;
   quotation_date: string | null;
+  quotation_kind?: QuotationKind;
   subtotal: number;
   gst_rate: number;
   gst_amount: number;
@@ -67,6 +76,7 @@ export type QuotationInput = {
   prepared_by_designation?: string;
   prepared_by_phone?: string;
   system_title?: string;
+  quotation_kind?: QuotationKind;
   quotation_date?: string;
   gst_rate?: number;
   advance_amount?: number;

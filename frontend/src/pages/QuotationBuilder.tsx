@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, Trash2, FileDown, Pencil, FileText, ChevronLeft, GripVertical, Library, Package, Sparkles, Search, ReceiptText, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Trash2, FileDown, Pencil, FileText, ChevronLeft, GripVertical, Library, Package, Sparkles, Search, ReceiptText, ChevronUp, ChevronDown, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   listQuotations, getQuotation, createQuotation, updateQuotation, deleteQuotation,
-  type QuotationListRow, type QuotationItem, type QuotationInput,
+  QUOTATION_KINDS,
+  type QuotationListRow, type QuotationItem, type QuotationInput, type QuotationKind, type Quotation,
 } from "@/lib/api/quotations";
+import { downloadQuotation as downloadSrivariQuotation, type QuotationRow as SrivariRow } from "@/lib/srivariQuotationPdf";
+import { createDelivery } from "@/lib/api/deliveries";
 import {
   listComponents, createComponent, bulkCreateComponents, deleteComponent,
   type LibraryComponent,
@@ -39,6 +42,7 @@ type Header = {
   customer_name: string; customer_address: string; customer_gstin: string;
   customer_contact: string; customer_contact_phone: string;
   particular: string; reference_no: string; system_title: string;
+  quotation_kind: QuotationKind;
   prepared_by_name: string; prepared_by_designation: string; prepared_by_phone: string;
   quotation_date: string; gst_rate: number;
   advance_amount: number; advance_date: string;
@@ -48,6 +52,7 @@ const blankHeader = (): Header => ({
   customer_name: "", customer_address: "", customer_gstin: "",
   customer_contact: "", customer_contact_phone: "",
   particular: "", reference_no: suggestRef(), system_title: "",
+  quotation_kind: "retail",
   prepared_by_name: "", prepared_by_designation: "", prepared_by_phone: "",
   quotation_date: today(), gst_rate: 18,
   advance_amount: 0, advance_date: "",
@@ -472,6 +477,7 @@ export default function QuotationBuilder() {
         customer_gstin: q.customer_gstin || "", customer_contact: q.customer_contact || "",
         customer_contact_phone: q.customer_contact_phone || "",
         particular: q.particular || "", reference_no: q.reference_no || "", system_title: q.system_title || "",
+        quotation_kind: q.quotation_kind || "retail",
         prepared_by_name: q.prepared_by_name || "", prepared_by_designation: q.prepared_by_designation || "",
         prepared_by_phone: q.prepared_by_phone || "",
         quotation_date: (q.quotation_date || today()).slice(0, 10),
@@ -496,6 +502,59 @@ export default function QuotationBuilder() {
       components: (it.components || []).filter((c) => (c.name || "").trim() || (c.group || "").trim()),
     })),
   });
+
+  // Map the builder's line items onto the Sri Vari quotation row shape for the
+  // selected format (R2). Retail/industrial/stamping are machine-shaped rows;
+  // service is a description row.
+  const toSrivariRows = (kind: QuotationKind, its: QuotationItem[]): SrivariRow[] =>
+    its.filter((it) => it.name.trim()).map((it, i) => {
+      const base = Number(it.amount ?? (Number(it.qty || 0) * Number(it.rate || 0)));
+      const common = { sno: String(i + 1), qty: it.qty != null ? String(it.qty) : undefined, basicPrice: base || undefined };
+      return kind === "service"
+        ? { ...common, description: [it.name, it.make, it.specifications].filter(Boolean).join(" — ") }
+        : { ...common, model: it.name, unitPrice: Number(it.rate) || undefined };
+    });
+
+  // Download the current quotation in the chosen Sri Vari letterhead format (R2).
+  const downloadSrivari = (kind: QuotationKind = header.quotation_kind) => {
+    const its = items.filter((it) => it.name.trim());
+    if (!its.length) { toast.error("Add at least one line item first"); return; }
+    const to = [header.customer_name, header.customer_address, header.customer_gstin ? `GSTIN: ${header.customer_gstin}` : "", header.customer_contact_phone ? `Phone: ${header.customer_contact_phone}` : ""]
+      .filter((x) => x && String(x).trim()).join("\n");
+    const subtotal = its.reduce((s, it) => s + Number(it.amount ?? Number(it.qty || 0) * Number(it.rate || 0)), 0);
+    downloadSrivariQuotation({
+      to,
+      refNo: header.reference_no || "",
+      date: header.quotation_date || "",
+      rows: toSrivariRows(kind, its),
+      total: subtotal,
+    }, kind);
+  };
+
+  // Convert an accepted quotation into a draft Delivery Challan (R3), prefilled
+  // from the quotation. Off-books extra flows only when the extended login set it.
+  const onConvertToChallan = async (id: number, no: string) => {
+    if (!confirm(`Convert quotation ${no} into a delivery challan?\n\nThis creates a DRAFT challan from the quotation's line items. Review it on the Delivery Challans page.`)) return;
+    try {
+      const q: Quotation = await getQuotation(id);
+      if (!q.items?.length) { toast.error("This quotation has no line items."); return; }
+      const itemsText = q.items.map((it) => `${it.name}${it.qty ? ` ×${it.qty}` : ""}`).join(", ");
+      const amount = Number(q.subtotal ?? 0);
+      const taxAmount = Number(q.gst_amount ?? 0);
+      await createDelivery({
+        customer_name: q.customer_name,
+        items: itemsText,
+        amount,
+        tax_amount: taxAmount,
+        notes: `Converted from Quotation ${q.quotation_no}.`,
+        status: "draft",
+      });
+      toast.success(`Delivery challan created from ${no}`);
+      navigate("/deliveries");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to convert to delivery challan");
+    }
+  };
 
   // mode "update" saves the open quotation; "new" always creates a fresh copy
   // (so an edited quotation can be saved as a separate new one).
@@ -636,6 +695,7 @@ export default function QuotationBuilder() {
               <div className="col-span-2 flex justify-end gap-1">
                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => onDownload(r.quotation_id)} title="Download PDF"><FileDown className="h-4 w-4" /></Button>
                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-primary" onClick={() => onConvertToInvoice(r.quotation_id, r.quotation_no)} title="Convert to Invoice (customer accepted)"><ReceiptText className="h-4 w-4" /></Button>
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-primary" onClick={() => onConvertToChallan(r.quotation_id, r.quotation_no)} title="Convert to Delivery Challan"><Truck className="h-4 w-4" /></Button>
                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => startEdit(r.quotation_id)} title="Edit"><Pencil className="h-4 w-4" /></Button>
                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive" onClick={() => onDelete(r.quotation_id, r.quotation_no)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
               </div>
@@ -660,6 +720,7 @@ export default function QuotationBuilder() {
             <Button variant="outline" onClick={() => save(false, "new")} disabled={saving} title="Save the current edits as a brand-new quotation">Save as New</Button>
           )}
           <Button className="gap-2" onClick={() => save(true, "update")} disabled={saving}><FileDown className="h-4 w-4" /> Save &amp; Download PDF</Button>
+          <Button variant="outline" className="gap-2" onClick={() => downloadSrivari()} title="Download in the selected Sri Vari format"><FileText className="h-4 w-4" /> Sri Vari PDF</Button>
         </div>
       </div>
 
@@ -698,6 +759,16 @@ export default function QuotationBuilder() {
         <div><label className="text-sm font-medium">Contact Phone</label><Input value={header.customer_contact_phone} onChange={(e) => setH("customer_contact_phone", e.target.value)} className="mt-1" /></div>
         <div><label className="text-sm font-medium">Reference No</label><Input value={header.reference_no} onChange={(e) => setH("reference_no", e.target.value)} placeholder="e.g. VB_TN-1234" className="mt-1" /></div>
         <div className="md:col-span-2"><label className="text-sm font-medium">System / Title band</label><Input value={header.system_title} onChange={(e) => setH("system_title", e.target.value)} placeholder="e.g. HYBRID WITH 60KW BACKUP" className="mt-1" /></div>
+        <div>
+          <label className="text-sm font-medium">Sri Vari Format</label>
+          <select
+            value={header.quotation_kind}
+            onChange={(e) => setH("quotation_kind", e.target.value as QuotationKind)}
+            className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            {QUOTATION_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+          </select>
+        </div>
         <div><label className="text-sm font-medium">Prepared By</label><Input value={header.prepared_by_name} onChange={(e) => setH("prepared_by_name", e.target.value)} placeholder="Name" className="mt-1" /></div>
         <div><label className="text-sm font-medium">Designation</label><Input value={header.prepared_by_designation} onChange={(e) => setH("prepared_by_designation", e.target.value)} className="mt-1" /></div>
         <div><label className="text-sm font-medium">Prepared-By Phone</label><Input value={header.prepared_by_phone} onChange={(e) => setH("prepared_by_phone", e.target.value)} className="mt-1" /></div>

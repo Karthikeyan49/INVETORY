@@ -64,7 +64,7 @@ class PurchaseController
     {
         $data = $request->only([
             'vendor_name', 'location', 'purchase_type', 'taxable', 'gst_pct', 'extra_amount',
-            'advance', 'payment_method', 'purchase_date', 'notes',
+            'advance', 'payment_method', 'utr_no', 'purchase_date', 'notes',
         ]);
         if (empty($data['vendor_name'])) {
             Response::error('vendor_name is required', 422);
@@ -99,7 +99,7 @@ class PurchaseController
         }
         $data = $request->only([
             'vendor_name', 'location', 'purchase_type', 'taxable', 'gst_pct', 'extra_amount',
-            'advance', 'payment_method', 'purchase_date', 'notes',
+            'advance', 'payment_method', 'utr_no', 'purchase_date', 'notes',
         ]);
         if (!self::isExtended($request)) {
             unset($data['extra_amount']);

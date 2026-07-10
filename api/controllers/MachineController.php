@@ -13,10 +13,11 @@ class MachineController
         $limit = min(100, max(1, (int)$request->query('limit', 20)));
 
         $filters = [
-            'status'      => $request->query('status'),
-            'category'    => $request->query('category'),
-            'customer_id' => $request->query('customer_id'),
-            'search'      => $request->query('search'),
+            'status'       => $request->query('status'),
+            'category'     => $request->query('category'),
+            'machine_type' => $request->query('machine_type'),
+            'customer_id'  => $request->query('customer_id'),
+            'search'       => $request->query('search'),
         ];
 
         if (!empty($filters['status']) && !in_array($filters['status'], Machine::STATUSES, true)) {
@@ -245,7 +246,7 @@ class MachineController
     public function store(Request $request): void
     {
         $data = $request->only([
-            'code', 'model', 'category', 'accuracy', 'platform_size', 'capacity', 'customer_id', 'zone_id',
+            'code', 'model', 'category', 'machine_type', 'accuracy', 'platform_size', 'capacity', 'customer_id', 'zone_id',
             'status', 'purchase_date', 'invoice_date', 'stamping_date', 'sold_date', 'notes',
             'hsn', 'buy_price', 'buy_gst_pct', 'sale_price', 'sale_gst_pct', 'tax_amount', 'extra_amount', 'extra_from_vendor',
         ]);

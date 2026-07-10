@@ -203,25 +203,26 @@ create/list/approve; generate the DCR PDF; connect field visits → leads/quotat
 
 ## 3. Pending Work Checklist (priority order — tick as done)
 
-- [ ] **T1** Rename "Complaints" → "Customer Complaints" (R8). *(quick)*
-- [ ] **T2** Machine `local` vs `brand` option + filter (R11). *(quick)*
-- [ ] **T3** Payment core: category dropdown (Bank/Cash/UPI) + UTR field + multi‑installment
+- [x] **T1** Rename "Complaints" → "Customer Complaints" (R8). *(quick)*
+- [x] **T2** Machine `local` vs `brand` option + filter (R11). *(quick)*
+- [x] **T3** Payment core: category dropdown (Bank/Cash/UPI) + UTR field + multi‑installment
       ledger + live outstanding, as a reusable pattern (R12). Retrofit existing
       Purchases/Payments to it.
-- [ ] **T4** Purchase Order register page: by‑category, advance/paid/outstanding,
+- [x] **T4** Purchase Order register page: by‑category, advance/paid/outstanding,
       credit + extra_amount (extended‑only), payment category + UTR, single‑page total
-      outstanding widget + Excel/PDF download (R10, R12). *(photo pending — see §5)*
-- [ ] **T5** Stamping advance → outstanding (R9), rolled into the outstanding widget.
-- [ ] **T6** Spare module: page like Machines + CRUD + low‑stock notification +
+      outstanding widget + Excel/PDF download (R10, R12). *(photo pending — see §5; built
+      provisional per instructions)*
+- [x] **T5** Stamping advance → outstanding (R9), rolled into the outstanding widget.
+- [x] **T6** Spare module: page like Machines + CRUD + low‑stock notification +
       forecasting (R6).
-- [ ] **T7** Quotation Builder 4‑format selector wired to Sri Vari builders (R2), and
+- [x] **T7** Quotation Builder 4‑format selector wired to Sri Vari builders (R2), and
       quotation → Invoice + Delivery Challan conversion (R3).
-- [ ] **T8** Delivery Challan carries tax + extra; Invoice shows extra (extended);
+- [x] **T8** Delivery Challan carries tax + extra; Invoice shows extra (extended);
       DC→Invoice include‑extra checkbox (extended only) (R4).
-- [ ] **T9** Cash Bill trigger on cash‑category invoices / service records (R5).
-- [ ] **T10** HR Incentive Payments page + incentive payslip (R7).
-- [ ] **T11** DCR (Daily Call Report) page + PDF (R13).
-- [ ] **T12** Cross‑cutting sweep: confirm `extra_amount` gating is present and correct
+- [x] **T9** Cash Bill trigger on cash‑category invoices / service records (R5).
+- [x] **T10** HR Incentive Payments page + incentive payslip (R7).
+- [x] **T11** DCR (Daily Call Report) page + PDF (R13).
+- [x] **T12** Cross‑cutting sweep: confirm `extra_amount` gating is present and correct
       in every payment feature above (R1). Verify standard vs extended totals differ by
       exactly the extra.
 
@@ -235,6 +236,119 @@ and stop.
 - 2026-07-10 — Plan created; 8 reference PDFs added to `docs/reference-pdfs/`; PDF
   templates (invoice/cash-bill/DC/4 quotations) already built, wired (except Cash Bill
   trigger) and deployed. Checklist T1–T12 pending.
+- 2026-07-09 — **T1 done**: nav label + Queries page heading "Complaints" → "Customer
+  Complaints". **T2 done**: added `machine_type` (`local`|`brand`) — migration
+  `021_machine_type.sql` (idempotent, default `brand`), Machine model create/update/
+  filter, MachineController store/update `only()` + index filter, machines API
+  type/filter, Machines page form selector + list filter + Type column badge. Frontend
+  `npm run build` green; `php -l` clean on Machine model + controller. (cloud run: no deploy)
+- 2026-07-09 — **T3 done**: reusable installment ledger (R12). New polymorphic
+  `payment_installments` table + `utr_no` on `payments`/`purchases`
+  (migration `022_payment_installments.sql`, idempotent). Model
+  `PaymentInstallment` (record/forRef/paidTotal/outstanding/summariseRef/
+  paidTotalsByType, categories Bank Transfer/Cash/UPI, seq→Advance/1st/2nd labels).
+  Generic `AdminInstallmentController` (GET/POST/DELETE `/admin/installments`) with
+  tax_view-gated grand-total resolution per ref_type (purchase/PO/stamping/incentive/
+  invoice) so outstanding auto-includes off-books extra only for extended login.
+  Routes registered. Frontend: `lib/api/installments.ts` + reusable
+  `PaymentLedger.tsx` component (category dropdown + UTR field + installment table +
+  live Total/Paid/Outstanding). Retrofitted vendor Purchases with a UTR field
+  end-to-end (model/controller/api/page). Ledger is the shared base T4/T5/T10 attach
+  to. `npm run build` green; `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T4 done (provisional)**: Purchase Order register (R10). New
+  `po_register` + `po_register_items` tables (migration `023_po_register.sql`,
+  idempotent). `PoRegister` model (items→taxable/gst/total, advance via ledger).
+  `AdminPoRegisterController` CRUD with extra_amount gating + live paid/outstanding
+  from the shared ledger (ref_type `po_register`, added to REF_TYPES + grandTotalFor).
+  New **`GET /admin/outstanding`** aggregate summing outstanding across PO
+  register + credit purchases + stamping (tax-gated), powering the single-page
+  Total Outstanding widget. Frontend `lib/api/poRegister.ts` + `PurchaseOrders.tsx`
+  page (by-category filter, items, extra gating, payment category + UTR, embedded
+  PaymentLedger, Total Outstanding widget with Excel/PDF download), nav entry under
+  Purchase, route `/purchase-orders`. Layout marked provisional pending the promised
+  photo (§5). `npm run build` green; `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T5 done**: Stamping fee + outstanding (R9). Migration
+  `024_stamping_outstanding.sql` adds `total_amount` + `extra_amount` to stampings
+  (idempotent). Stamping model create records fee/extra + optional advance via the
+  shared ledger (ref_type `stamping`); `updateFee`, `attachLedger`/`withLedgerRow`
+  compute tax-gated paid/outstanding. StampingController gates extra, enriches
+  list/create responses, new `PUT /stampings/{id}/fee`. Outstanding already rolls
+  into the T4 `/admin/outstanding` widget (reads stampings defensively). Frontend
+  stamping api (`updateStampingFee` + fee/outstanding fields) + Stamping page
+  (fee/extra/advance/category/UTR on create, Fee + Outstanding columns, embedded
+  PaymentLedger dialog). `npm run build` green; `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T6 done**: Spares module (R6). Migration `025_spares.sql` —
+  `spares` (name/part_no/category/quantity/unit/unit_cost/reorder_level/location/
+  notes) + `spare_movements` consumption ledger (idempotent). `Spare` model (CRUD,
+  `move` receive/consume/issue adjusting qty + logging movement, mirrors machine-
+  fitted consumption into MachineMovement, `lowStock`, consumption-based `forecast`
+  → avg daily use / days-to-stockout / suggested reorder). `SpareController`
+  (index/show/store/update/move/destroy + `/spares/low-stock` + `/spares/forecast`),
+  routes registered (literals before `{id}`). Frontend `lib/api/spares.ts` +
+  `pages/inventory/Spares.tsx` (Stock + Forecast tabs, low-stock badge/filter, move
+  dialog with machine link), nav "Spares" under Inventory, route `/spares`, plus a
+  Dashboard low-stock banner. `npm run build` green; `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T7 done**: Quotation 4-format selector + conversions (R2/R3).
+  Migration `026_quotation_kind.sql` adds `quotation_kind` (retail/industrial/
+  service/stamping) to quotations (idempotent); AdminQuotationController validates,
+  persists on store/update. Frontend quotations api gains `QuotationKind` +
+  `QUOTATION_KINDS`; QuotationBuilder gains a "Sri Vari Format" selector, a
+  "Sri Vari PDF" download that maps line items → `buildQuotation(data, kind)` rows
+  per format (service=description rows, others=machine rows), and a
+  "Convert to Delivery Challan" list action (prefilled draft challan, alongside the
+  existing convert-to-invoice). `npm run build` green; `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T8 done**: DC ↔ Invoice extra (R4). DC record already carries tax
+  + extra_amount/extra_from_vendor (create form + extended-only list columns, gated
+  server-side). Invoices already support/display extra_amount (extended, Set-2).
+  Added **DC→Invoice conversion** on the Deliveries page: a "To Invoice" action opens
+  a dialog that creates a draft GST invoice prefilled from the challan (customer,
+  goods, taxable → line, GST rate derived from tax/amount); an **"include extra
+  amount" checkbox shown only to the extended login** carries the challan's off-books
+  extra onto the invoice. Printed challan PDF intentionally omits off-books figures.
+  `npm run build` green. (cloud run: no deploy)
+- 2026-07-09 — **T9 done**: Cash Bill trigger (R5). Wired the existing
+  `downloadCashBill` (Sri Vari cash-bill template) into the Invoices page:
+  `downloadCashBillForInvoice` fetches the full invoice and maps customer/items/
+  qty/amount/total onto `CashBillData`; a "Cash Bill" button appears in the invoice
+  detail dialog only for **Cash** payment-method invoices. `npm run build` green.
+  (cloud run: no deploy)
+- 2026-07-09 — **T10 done**: HR Incentive Payments (R7). Migration `027_incentives.sql`
+  — `incentives` table (employee link, person, basis per_sale/per_visit/per_collection/
+  fixed/percentage, rate/units/base, computed amount, extra_amount, period, status,
+  payment_category/UTR, expense link) idempotent. `Incentive` model (computeAmount,
+  CRUD, markPaid → posts an **Incentive expense → Finance/P&L**). `AdminIncentiveController`
+  (index with paid/unpaid summary, show/store/update/pay/destroy, extra_amount gating),
+  routes registered (hr/accountant/owner). Frontend `lib/api/incentives.ts` +
+  `Incentives.tsx` (summary tiles, basis-aware form with live amount, employee picker,
+  pay dialog posting expense) + `incentivePayslipPdf.ts` payslip, nav "Incentives"
+  under HR, route `/incentives`. Separate from fixed payroll. `npm run build` green;
+  `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T11 done**: Daily Call Report (R13, F-SVS-01). Migration
+  `028_dcr.sql` — `dcr` + `dcr_lines` (idempotent). `Dcr` model (create/update with
+  lines, auto total_km, **approve seeds follow-ups (leads)** from prospect lines →
+  links dcr_lines.followup_id). `AdminDcrController` (index/show/store/update/approve/
+  destroy), routes (sales/hr/accountant/owner). Frontend `lib/api/dcr.ts` + `Dcr.tsx`
+  (header + full visit-lines editor: customer/address/mobile/model/status/type/
+  category/stamping/service/payment/remarks, approve + lead-seeding, detail view) +
+  `dcrPdf.ts` rendering the F-SVS-01 layout (verified against
+  docs/reference-pdfs/dcr-daily-call-report.pdf columns), nav "Daily Call Report"
+  under Customer Care, route `/dcr`. Field visits → leads wired. `npm run build`
+  green; `php -l` clean. (cloud run: no deploy)
+- 2026-07-09 — **T12 done**: cross-cutting extra_amount gating sweep (R1). Audited
+  every payment feature — all controllers that expose extra_amount also gate on
+  `tax_view` (isExtended), and all frontend forms/columns render extra only for the
+  extended login: Machines, Purchases (extra=0 for standard on read/write),
+  PO register (`withLedger` unsets extra + grand adds it only if extended), Stamping
+  (`withLedgerRow`), Installment ledger (`grandTotalFor` per ref_type), Delivery
+  Challan (`gateTax` + DC→Invoice include-extra checkbox extended-only), Invoices
+  (Set-2 gating + P&L revenue extra extended-only), Incentives (`gate()` + summary),
+  Outstanding widget (adds extra per source only if extended). Verified by
+  construction: every grand total = `base + (extended ? extra : 0)`, so **standard
+  vs extended totals differ by exactly Σ(extra)**. No leaks found; no code changes
+  required.
+- 2026-07-09 — **SET 3 COMPLETE** — T1–T12 all implemented, built (`npm run build`
+  green) and `php -l` clean, committed and pushed to `origin/autonomous/set3`
+  (PR #1). Cloud run: no deploy (Hostinger credentials are local-only, per plan).
 
 ---
 
