@@ -14,3 +14,8 @@ node_modules/
 
 # Generated Hostinger deploy bundles
 /*.com/
+
+# Editor deploy configs with credentials — never commit
+.vscode/sftp.json
+sftp.json
+**/sftp.json
