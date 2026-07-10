@@ -67,10 +67,10 @@ class Stamping
             ? (string)$data['expiry_date']
             : self::computeExpiry($stampDate);
 
-        return Database::insert(
+        $id = Database::insert(
             "INSERT INTO stampings
-                (machine_id, customer_id, certificate_no, stamp_date, expiry_date, quarter, status, notes, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (machine_id, customer_id, certificate_no, stamp_date, expiry_date, quarter, total_amount, extra_amount, status, notes, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (int)$data['machine_id'],
                 !empty($data['customer_id']) ? (int)$data['customer_id'] : null,
@@ -78,11 +78,84 @@ class Stamping
                 $stampDate,
                 $expiryDate,
                 $data['quarter'] ?? self::quarterOf($stampDate),
+                max(0.0, (float)($data['total_amount'] ?? 0)),
+                max(0.0, (float)($data['extra_amount'] ?? 0)),
                 in_array($data['status'] ?? '', self::STATUSES, true) ? $data['status'] : ($stampDate ? 'stamped' : 'pending'),
                 isset($data['notes']) ? trim((string)$data['notes']) : null,
                 !empty($data['created_by']) ? (int)$data['created_by'] : null,
             ]
         );
+
+        // Optional stamping advance recorded through the shared installment ledger.
+        $advance = isset($data['advance']) ? (float)$data['advance'] : 0.0;
+        if ($advance > 0 && class_exists('PaymentInstallment')) {
+            PaymentInstallment::record('stamping', $id, [
+                'amount'     => $advance,
+                'category'   => $data['payment_category'] ?? 'Cash',
+                'utr_no'     => $data['utr_no'] ?? null,
+                'paid_on'    => $stampDate ?? date('Y-m-d'),
+                'seq'        => 0,
+                'label'      => 'Advance',
+                'created_by' => $data['created_by'] ?? null,
+            ]);
+        }
+        return $id;
+    }
+
+    /** Update the fee / extra amount on a stamping record (R9 / T5). */
+    public static function updateFee(int $id, array $data): bool
+    {
+        $fields = [];
+        $params = [];
+        if (array_key_exists('total_amount', $data)) {
+            $fields[] = 'total_amount = ?';
+            $params[] = max(0.0, (float)$data['total_amount']);
+        }
+        if (array_key_exists('extra_amount', $data)) {
+            $fields[] = 'extra_amount = ?';
+            $params[] = max(0.0, (float)$data['extra_amount']);
+        }
+        if (!$fields) {
+            return false;
+        }
+        $params[] = $id;
+        return Database::execute("UPDATE stampings SET " . implode(', ', $fields) . " WHERE id = ?", $params) >= 0;
+    }
+
+    /** Enrich stamping rows with tax-gated paid/outstanding from the ledger. */
+    public static function attachLedger(array $rows, bool $extended): array
+    {
+        if (!class_exists('PaymentInstallment')) {
+            return $rows;
+        }
+        $paidMap = PaymentInstallment::paidTotalsByType('stamping');
+        foreach ($rows as &$r) {
+            $r = self::withLedgerRow($r, $extended, $paidMap);
+        }
+        unset($r);
+        return $rows;
+    }
+
+    public static function withLedgerRow(array $r, bool $extended, ?array $paidMap = null): array
+    {
+        if ($paidMap === null) {
+            $paidMap = class_exists('PaymentInstallment') ? PaymentInstallment::paidTotalsByType('stamping') : [];
+        }
+        $total = (float)($r['total_amount'] ?? 0);
+        $extra = $extended ? (float)($r['extra_amount'] ?? 0) : 0.0;
+        $grand = round($total + $extra, 2);
+        $paid  = (float)($paidMap[(int)$r['id']] ?? 0);
+        $r['total_amount']   = round($total, 2);
+        $r['grand_total']    = $grand;
+        $r['amount_paid']    = round($paid, 2);
+        $r['outstanding']    = round(max(0.0, $grand - $paid), 2);
+        $r['payment_status'] = $paid <= 0.005 ? 'unpaid' : ($r['outstanding'] <= 0.005 ? 'paid' : 'partial');
+        if (!$extended) {
+            unset($r['extra_amount']);
+        } else {
+            $r['extra_amount'] = round((float)($r['extra_amount'] ?? 0), 2);
+        }
+        return $r;
     }
 
     /**

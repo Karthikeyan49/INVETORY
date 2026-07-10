@@ -50,10 +50,10 @@ class AdminQuotationController
         $quotationId = Database::insert(
             'INSERT INTO quotations (quotation_no, customer_name, customer_address, particular,
                     customer_gstin, customer_contact, customer_contact_phone, reference_no,
-                    prepared_by_name, prepared_by_designation, prepared_by_phone, system_title,
+                    prepared_by_name, prepared_by_designation, prepared_by_phone, system_title, quotation_kind,
                     quotation_date, subtotal, gst_rate, gst_amount, grand_total,
                     advance_amount, advance_date, terms, notes, status)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
             [
                 $quotationNo,
                 $data['customer_name'],
@@ -67,6 +67,7 @@ class AdminQuotationController
                 $data['prepared_by_designation'],
                 $data['prepared_by_phone'],
                 $data['system_title'],
+                $data['quotation_kind'],
                 $data['quotation_date'],
                 $totals['subtotal'],
                 $data['gst_rate'],
@@ -101,7 +102,7 @@ class AdminQuotationController
         Database::execute(
             'UPDATE quotations SET customer_name = ?, customer_address = ?, particular = ?,
                     customer_gstin = ?, customer_contact = ?, customer_contact_phone = ?, reference_no = ?,
-                    prepared_by_name = ?, prepared_by_designation = ?, prepared_by_phone = ?, system_title = ?,
+                    prepared_by_name = ?, prepared_by_designation = ?, prepared_by_phone = ?, system_title = ?, quotation_kind = ?,
                     quotation_date = ?, subtotal = ?, gst_rate = ?, gst_amount = ?, grand_total = ?,
                     advance_amount = ?, advance_date = ?, terms = ?, notes = ?, status = ?,
                     updated_at = NOW()
@@ -109,7 +110,7 @@ class AdminQuotationController
             [
                 $data['customer_name'], $data['customer_address'], $data['particular'],
                 $data['customer_gstin'], $data['customer_contact'], $data['customer_contact_phone'], $data['reference_no'],
-                $data['prepared_by_name'], $data['prepared_by_designation'], $data['prepared_by_phone'], $data['system_title'],
+                $data['prepared_by_name'], $data['prepared_by_designation'], $data['prepared_by_phone'], $data['system_title'], $data['quotation_kind'],
                 $data['quotation_date'], $totals['subtotal'], $data['gst_rate'], $totals['gst_amount'], $totals['grand_total'],
                 $data['advance_amount'], $data['advance_date'], $data['terms'], $data['notes'], $data['status'], $id,
             ]
@@ -220,6 +221,9 @@ class AdminQuotationController
             'prepared_by_designation' => trim((string) $request->input('prepared_by_designation', '')) ?: null,
             'prepared_by_phone'       => trim((string) $request->input('prepared_by_phone', '')) ?: null,
             'system_title'            => trim((string) $request->input('system_title', '')) ?: null,
+            'quotation_kind'          => in_array((string) $request->input('quotation_kind', ''), ['retail', 'industrial', 'service', 'stamping'], true)
+                                            ? (string) $request->input('quotation_kind')
+                                            : 'retail',
             'quotation_date'          => $this->normalizeDate((string) $request->input('quotation_date', '')),
             'gst_rate'                => $gstRate,
             'advance_amount'          => $advanceAmount,

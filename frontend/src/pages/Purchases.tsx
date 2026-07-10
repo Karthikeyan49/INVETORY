@@ -16,7 +16,7 @@ import {
 
 const emptyForm = {
   vendor_name: "", location: "", purchase_type: "cash" as PurchaseType,
-  taxable: "", gst_pct: "", extra_amount: "", advance: "", payment_method: "Bank Transfer",
+  taxable: "", gst_pct: "", extra_amount: "", advance: "", payment_method: "Bank Transfer", utr_no: "",
   purchase_date: "", notes: "",
 };
 type FormState = typeof emptyForm;
@@ -29,7 +29,7 @@ function toForm(p: Purchase): FormState {
     vendor_name: p.vendor_name ?? "", location: p.location ?? "", purchase_type: p.purchase_type,
     taxable: p.taxable ? String(p.taxable) : "", gst_pct: p.gst_pct ? String(p.gst_pct) : "",
     extra_amount: p.extra_amount ? String(p.extra_amount) : "", advance: p.advance ? String(p.advance) : "",
-    payment_method: p.payment_method ?? "Bank Transfer",
+    payment_method: p.payment_method ?? "Bank Transfer", utr_no: p.utr_no ?? "",
     purchase_date: p.purchase_date ?? "", notes: p.notes ?? "",
   };
 }
@@ -38,7 +38,8 @@ function toPayload(f: FormState): PurchaseInput {
     vendor_name: f.vendor_name.trim(), location: f.location.trim() || undefined,
     purchase_type: f.purchase_type, taxable: Number(f.taxable) || 0, gst_pct: Number(f.gst_pct) || 0,
     extra_amount: Number(f.extra_amount) || 0, advance: Number(f.advance) || 0,
-    payment_method: f.payment_method || undefined, purchase_date: f.purchase_date || undefined,
+    payment_method: f.payment_method || undefined, utr_no: f.utr_no.trim() || undefined,
+    purchase_date: f.purchase_date || undefined,
     notes: f.notes.trim() || undefined,
   };
 }
@@ -188,6 +189,21 @@ export default function Purchases() {
         <div>
           <label className="text-xs text-muted-foreground">Purchase date</label>
           <Input type="date" value={form.purchase_date} onChange={(e) => setForm({ ...form, purchase_date: e.target.value })} />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {form.purchase_type === "credit" && (
+          <div>
+            <label className="text-xs text-muted-foreground">Payment method</label>
+            <Select value={form.payment_method} onValueChange={(v) => setForm({ ...form, payment_method: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{PURCHASE_PAYMENT_MODES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        )}
+        <div>
+          <label className="text-xs text-muted-foreground">UTR / Ref number</label>
+          <Input placeholder="Transaction / UTR reference" value={form.utr_no} onChange={(e) => setForm({ ...form, utr_no: e.target.value })} />
         </div>
       </div>
       <div>

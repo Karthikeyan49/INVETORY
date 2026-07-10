@@ -103,6 +103,7 @@ require_once ROOT_PATH . '/models/AttendanceShift.php';
 require_once ROOT_PATH . '/models/Attendance.php';
 require_once ROOT_PATH . '/models/AttendanceAnalytics.php';
 require_once ROOT_PATH . '/models/Payroll.php';
+require_once ROOT_PATH . '/models/Incentive.php';
 require_once ROOT_PATH . '/models/EmployeeAdvance.php';
 require_once ROOT_PATH . '/models/Task.php';
 require_once ROOT_PATH . '/models/Meeting.php';
@@ -125,6 +126,8 @@ require_once ROOT_PATH . '/models/InventoryMovement.php';
 require_once ROOT_PATH . '/models/InventoryAllocation.php';
 require_once ROOT_PATH . '/models/PurchaseOrder.php';
 require_once ROOT_PATH . '/models/Payment.php';
+require_once ROOT_PATH . '/models/PaymentInstallment.php';
+require_once ROOT_PATH . '/models/PoRegister.php';
 require_once ROOT_PATH . '/models/SalesDocument.php';
 require_once ROOT_PATH . '/models/TestCertificate.php';
 require_once ROOT_PATH . '/models/GstCompliance.php';
@@ -134,10 +137,12 @@ require_once ROOT_PATH . '/models/Machine.php';
 require_once ROOT_PATH . '/models/MachineIssue.php';
 require_once ROOT_PATH . '/models/MachineMovement.php';
 require_once ROOT_PATH . '/models/InventoryItem.php';
+require_once ROOT_PATH . '/models/Spare.php';
 require_once ROOT_PATH . '/models/Purchase.php';
 require_once ROOT_PATH . '/models/Funding.php';
 require_once ROOT_PATH . '/models/Stamping.php';
 require_once ROOT_PATH . '/models/Followup.php';
+require_once ROOT_PATH . '/models/Dcr.php';
 require_once ROOT_PATH . '/models/DeliveryNote.php';
 require_once ROOT_PATH . '/helpers/GroqAPI.php';
 require_once ROOT_PATH . '/controllers/AuthController.php';
@@ -151,6 +156,7 @@ require_once ROOT_PATH . '/controllers/DealerWorkspaceController.php';
 require_once ROOT_PATH . '/controllers/MachineController.php';
 require_once ROOT_PATH . '/controllers/MachineIssueController.php';
 require_once ROOT_PATH . '/controllers/InventoryItemController.php';
+require_once ROOT_PATH . '/controllers/SpareController.php';
 require_once ROOT_PATH . '/controllers/PurchaseController.php';
 require_once ROOT_PATH . '/controllers/FundingController.php';
 require_once ROOT_PATH . '/controllers/StampingController.php';
@@ -175,6 +181,8 @@ require_once ROOT_PATH . '/controllers/admin/AdminTaskController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminEmployeeController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminAttendanceController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminPayrollController.php';
+require_once ROOT_PATH . '/controllers/admin/AdminIncentiveController.php';
+require_once ROOT_PATH . '/controllers/admin/AdminDcrController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminEmployeeAdvanceController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminFaqController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminMeetingController.php';
@@ -203,6 +211,8 @@ require_once ROOT_PATH . '/controllers/admin/InventoryIntelligenceController.php
 require_once ROOT_PATH . '/controllers/admin/ReorderIntelligenceController.php';
 require_once ROOT_PATH . '/controllers/admin/InventoryApprovalController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminPaymentController.php';
+require_once ROOT_PATH . '/controllers/admin/AdminInstallmentController.php';
+require_once ROOT_PATH . '/controllers/admin/AdminPoRegisterController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSalesDocumentController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminQuotationController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminQuotationComponentController.php';
@@ -272,6 +282,7 @@ $router->get('/stampings/alerts',        [StampingController::class, 'alerts'], 
 $router->post('/stampings',              [StampingController::class, 'store'],        true);
 $router->put('/stampings/{id}/renew',    [StampingController::class, 'renew'],        true);
 $router->put('/stampings/{id}/status',   [StampingController::class, 'updateStatus'], true);
+$router->put('/stampings/{id}/fee',      [StampingController::class, 'updateFee'],    true);
 
 // Machine Issues — service / fault tracking
 $router->get('/machine-issues',              [MachineIssueController::class, 'index'],   true);
@@ -297,6 +308,16 @@ $router->post('/inventory-items',       [InventoryItemController::class, 'store'
 $router->get('/inventory-items/{id}',   [InventoryItemController::class, 'show'],    true);
 $router->put('/inventory-items/{id}',   [InventoryItemController::class, 'update'],  true);
 $router->delete('/inventory-items/{id}',[InventoryItemController::class, 'destroy'], true);
+
+// Spares — spare-parts stock register with low-stock + forecast (R6 / T6)
+$router->get('/spares/low-stock',       [SpareController::class, 'lowStock'],  true); // before {id}
+$router->get('/spares/forecast',        [SpareController::class, 'forecast'],  true); // before {id}
+$router->get('/spares',                 [SpareController::class, 'index'],     true);
+$router->post('/spares',                [SpareController::class, 'store'],     true);
+$router->get('/spares/{id}',            [SpareController::class, 'show'],       true);
+$router->put('/spares/{id}',            [SpareController::class, 'update'],     true);
+$router->post('/spares/{id}/move',      [SpareController::class, 'move'],       true);
+$router->delete('/spares/{id}',         [SpareController::class, 'destroy'],    true);
 
 // Delivery challans (requirement.txt — lines 6, 8, 14)
 $router->get('/deliveries',              [DeliveryController::class, 'index'],        true);
@@ -538,6 +559,19 @@ $router->post('/admin/payments/{id}/void',     [AdminPaymentController::class, '
 $router->get('/admin/payments/{id}',           [AdminPaymentController::class, 'show'],     'admin');
 $router->get('/admin/receivables/ageing',      [AdminPaymentController::class, 'receivablesAgeing'], 'admin');
 
+// Reusable installment ledger (R12 / T3) — advance + N installments per document
+$router->get('/admin/installments',            [AdminInstallmentController::class, 'index'],   'admin');
+$router->post('/admin/installments',           [AdminInstallmentController::class, 'store'],   'admin:owner,accountant');
+$router->delete('/admin/installments/{id}',    [AdminInstallmentController::class, 'destroy'], 'admin:owner,accountant');
+
+// Purchase Order register (R10 / T4) + single-page Total Outstanding widget
+$router->get('/admin/outstanding',             [AdminPoRegisterController::class, 'outstanding'], 'admin'); // before {id}
+$router->get('/admin/po-register',             [AdminPoRegisterController::class, 'index'],    'admin');
+$router->post('/admin/po-register',            [AdminPoRegisterController::class, 'store'],    'admin:owner,accountant');
+$router->get('/admin/po-register/{id}',        [AdminPoRegisterController::class, 'show'],     'admin');
+$router->put('/admin/po-register/{id}',        [AdminPoRegisterController::class, 'update'],   'admin:owner,accountant');
+$router->delete('/admin/po-register/{id}',     [AdminPoRegisterController::class, 'destroy'],  'admin:owner,accountant');
+
 // Admin Sales Billing - Quotations and Proformas
 $router->get('/admin/sales-documents',                 [AdminSalesDocumentController::class, 'index'],        'admin');
 $router->post('/admin/sales-documents',                [AdminSalesDocumentController::class, 'store'],        'admin:owner,accountant,sales');
@@ -759,6 +793,22 @@ $router->post('/admin/payroll/ai-check',              [AdminPayrollController::c
 $router->post('/admin/payroll/run',                   [AdminPayrollController::class, 'run'],      'admin');
 $router->post('/admin/payroll/calculate',             [AdminPayrollController::class, 'calculate'],'admin');
 $router->post('/admin/payroll/process',               [AdminPayrollController::class, 'process'],  'admin');
+
+// ─── Admin Incentive Payments (R7 / T10) — output-based pay, separate from payroll
+$router->get('/admin/incentives',                     [AdminIncentiveController::class, 'index'],   'admin');
+$router->post('/admin/incentives',                    [AdminIncentiveController::class, 'store'],   'admin:owner,accountant,hr');
+$router->get('/admin/incentives/{id}',                [AdminIncentiveController::class, 'show'],    'admin');
+$router->put('/admin/incentives/{id}',                [AdminIncentiveController::class, 'update'],  'admin:owner,accountant,hr');
+$router->post('/admin/incentives/{id}/pay',           [AdminIncentiveController::class, 'pay'],     'admin:owner,accountant,hr');
+$router->delete('/admin/incentives/{id}',             [AdminIncentiveController::class, 'destroy'], 'admin:owner,accountant,hr');
+
+// ─── Admin Daily Call Report (R13 / T11) — field visits → leads
+$router->get('/admin/dcr',                            [AdminDcrController::class, 'index'],    'admin');
+$router->post('/admin/dcr',                           [AdminDcrController::class, 'store'],    'admin:owner,accountant,hr,sales');
+$router->get('/admin/dcr/{id}',                       [AdminDcrController::class, 'show'],     'admin');
+$router->put('/admin/dcr/{id}',                       [AdminDcrController::class, 'update'],   'admin:owner,accountant,hr,sales');
+$router->post('/admin/dcr/{id}/approve',              [AdminDcrController::class, 'approve'],  'admin:owner,accountant,hr');
+$router->delete('/admin/dcr/{id}',                    [AdminDcrController::class, 'destroy'],  'admin:owner,accountant,hr');
 
 // ─── Admin Employee Advances ────────────────────────────────────────────────
 $router->get('/admin/employee-advances',              [AdminEmployeeAdvanceController::class, 'index'],   'admin');

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Plus, Search, Truck, AlertTriangle, FileDown } from "lucide-react";
+import { Plus, Search, Truck, AlertTriangle, FileDown, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,10 @@ import {
 } from "@/lib/api/deliveries";
 import { fetchMachines, type Machine } from "@/lib/api/machines";
 import { downloadChallanPdf } from "@/lib/deliveryChallanPdf";
+import { apiFetch } from "@/lib/api/client";
+import { settingsApi } from "@/lib/api/settings";
+import { stateFromGstin } from "@/lib/gstState";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const STATUSES: DeliveryStatus[] = ["draft", "issued", "delivered", "cancelled"];
 
@@ -47,6 +51,9 @@ export default function Deliveries() {
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [convertFor, setConvertFor] = useState<DeliveryNote | null>(null);
+  const [includeExtra, setIncludeExtra] = useState(false);
+  const [converting, setConverting] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -135,6 +142,57 @@ export default function Deliveries() {
       load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update status");
+    }
+  }
+
+  function openConvert(r: DeliveryNote) {
+    setConvertFor(r);
+    setIncludeExtra(false);
+  }
+
+  // Convert a delivery challan into a draft GST invoice (R4), prefilled from the
+  // challan. The extended login may tick "include extra amount" to carry the
+  // challan's off-books extra onto the invoice.
+  async function confirmConvert() {
+    if (!convertFor) return;
+    const r = convertFor;
+    setConverting(true);
+    try {
+      let sellerState = "";
+      try { const st = await settingsApi.get(); sellerState = stateFromGstin(st.gstin || ""); } catch { /* optional */ }
+      if (!sellerState) sellerState = "Tamil Nadu";
+      const base = Number(r.amount ?? 0);
+      const tax = Number(r.tax_amount ?? 0);
+      const gstRate = base > 0 && tax > 0 ? Math.round((tax / base) * 100) : 18;
+      const allowed = new Set([0, 5, 12, 18, 28]);
+      const gst = allowed.has(gstRate) ? gstRate : 18;
+      await apiFetch("/admin/invoices/gst", {
+        method: "POST",
+        body: JSON.stringify({
+          customer_name: r.customer_name || "Customer",
+          customer_state: sellerState,
+          seller_state: sellerState,
+          status: "Draft",
+          payment_status: "unpaid",
+          notes: `Converted from Delivery Challan ${r.challan_no}.`,
+          extra_amount: extended && includeExtra ? Number(r.extra_amount ?? 0) : 0,
+          items: [{
+            description: r.items || r.machine_model || r.machine_code || "Delivered goods",
+            hsn_code: null,
+            quantity: 1,
+            unit: "Nos",
+            unit_price: base,
+            gst_rate: gst,
+          }],
+        }),
+      });
+      toast.success(`Invoice created from ${r.challan_no}`);
+      setConvertFor(null);
+      navigate("/invoices");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not convert to invoice");
+    } finally {
+      setConverting(false);
     }
   }
 
@@ -283,13 +341,38 @@ export default function Deliveries() {
                   ) : <span className="text-green-600 text-xs">ok</span>}
                 </td>
                 <td className="p-3">
-                  <Button size="sm" variant="outline" onClick={() => downloadChallanPdf(r)}><FileDown className="h-3.5 w-3.5 mr-1" />PDF</Button>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => downloadChallanPdf(r)}><FileDown className="h-3.5 w-3.5 mr-1" />PDF</Button>
+                    <Button size="sm" variant="outline" onClick={() => openConvert(r)} title="Convert to Invoice"><ReceiptText className="h-3.5 w-3.5 mr-1" />Invoice</Button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Convert challan → invoice (R4) — include-extra checkbox for extended login */}
+      <Dialog open={!!convertFor} onOpenChange={(o) => !o && setConvertFor(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Convert {convertFor?.challan_no} to Invoice</DialogTitle></DialogHeader>
+          {convertFor && (
+            <div className="space-y-3 text-sm">
+              <p className="text-muted-foreground">Creates a draft GST invoice from this challan's customer, goods and taxable amount ({money(convertFor.amount)} + tax {money(convertFor.tax_amount)}).</p>
+              {extended && Number(convertFor.extra_amount ?? 0) > 0 && (
+                <label className="flex items-center gap-2 rounded-md border p-3 cursor-pointer">
+                  <Checkbox checked={includeExtra} onCheckedChange={(v) => setIncludeExtra(!!v)} />
+                  <span>Include off-books extra amount <span className="font-medium text-amber-700">{money(convertFor.extra_amount)}</span> on the invoice</span>
+                </label>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConvertFor(null)}>Cancel</Button>
+            <Button onClick={confirmConvert} disabled={converting}>{converting ? "Converting…" : "Create Invoice"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

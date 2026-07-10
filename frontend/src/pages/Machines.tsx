@@ -13,7 +13,7 @@ import {
 import {
   fetchMachines, createMachine, updateMachine, updateMachineStatus, getMachine, addPart, updatePart,
   fetchDispatchRecommendations, transferPart, fetchTaxSummary, fetchCatalog, fetchMachineMovements,
-  STATUS_LABELS, type Machine, type MachineStatus, type MachinePart, type TaxSummary, type MachineCatalog,
+  STATUS_LABELS, type Machine, type MachineStatus, type MachineType, type MachinePart, type TaxSummary, type MachineCatalog,
   type MachineMovement,
 } from "@/lib/api/machines";
 import { createIssue } from "@/lib/api/machineIssues";
@@ -30,7 +30,7 @@ const statusClass: Record<MachineStatus, string> = {
 };
 
 const emptyForm = {
-  code: "", model: "", category: "", accuracy: "", platform_size: "", capacity: "", hsn: "",
+  code: "", model: "", category: "", machine_type: "brand" as MachineType, accuracy: "", platform_size: "", capacity: "", hsn: "",
   status: "in_stock" as MachineStatus,
   purchase_date: "", invoice_date: "", stamping_date: "", same_date: false, notes: "",
   buy_price: "", buy_gst_pct: "", sale_price: "", sale_gst_pct: "",
@@ -62,6 +62,7 @@ export default function Machines() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<MachineStatus | "all">("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState<MachineType | "all">("all");
 
   const [catalog, setCatalog] = useState<MachineCatalog>({ models: [], categories: [], accuracies: [], platform_sizes: [], capacities: [], hsns: [], part_names: [] });
 
@@ -110,6 +111,7 @@ export default function Machines() {
         search,
         status: statusFilter === "all" ? "" : statusFilter,
         category: categoryFilter === "all" ? "" : categoryFilter,
+        machine_type: typeFilter === "all" ? "" : typeFilter,
       });
       setMachines(rows);
     } catch (e) {
@@ -119,7 +121,7 @@ export default function Machines() {
     }
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [statusFilter, categoryFilter]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [statusFilter, categoryFilter, typeFilter]);
   useEffect(() => { loadCatalog(); }, []);
 
   // Auto-fill category/HSN/prices when a known model name is chosen (requirement).
@@ -146,7 +148,7 @@ export default function Machines() {
   function openEdit(m: Machine) {
     setEditingId(m.id);
     setForm({
-      code: m.code, model: m.model ?? "", category: m.category ?? "",
+      code: m.code, model: m.model ?? "", category: m.category ?? "", machine_type: m.machine_type ?? "brand",
       accuracy: m.accuracy ?? "", platform_size: m.platform_size ?? "", capacity: m.capacity ?? "", hsn: m.hsn ?? "",
       status: m.status, purchase_date: m.purchase_date ?? "",
       invoice_date: m.invoice_date ?? "", stamping_date: m.stamping_date ?? "",
@@ -171,7 +173,7 @@ export default function Machines() {
     const taxAmount = saleBase != null && salePct != null ? Math.round(saleBase * salePct) / 100 : null;
     const stampingDate = form.same_date ? form.invoice_date : form.stamping_date;
     const payload: Partial<Machine> & Record<string, unknown> = {
-      code: form.code, model: form.model, category: form.category,
+      code: form.code, model: form.model, category: form.category, machine_type: form.machine_type,
       accuracy: form.accuracy, platform_size: form.platform_size, capacity: form.capacity, hsn: form.hsn,
       status: form.status, purchase_date: form.purchase_date,
       invoice_date: form.invoice_date, stamping_date: stampingDate, notes: form.notes,
@@ -323,6 +325,16 @@ export default function Machines() {
                 <datalist id="ml-hsn">{catalog.hsns.map((h) => <option key={h} value={h} />)}</datalist>
               </div>
             </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Machine Type</label>
+              <Select value={form.machine_type} onValueChange={(v) => setForm({ ...form, machine_type: v as MachineType })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="brand">Brand</SelectItem>
+                  <SelectItem value="local">Local</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="text-xs text-muted-foreground">Accuracy</label>
@@ -457,6 +469,10 @@ export default function Machines() {
           <SelectTrigger className="w-44"><SelectValue placeholder="Category" /></SelectTrigger>
           <SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
         </Select>
+        <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as MachineType | "all")}>
+          <SelectTrigger className="w-40"><SelectValue placeholder="Type" /></SelectTrigger>
+          <SelectContent><SelectItem value="all">All types</SelectItem><SelectItem value="brand">Brand</SelectItem><SelectItem value="local">Local</SelectItem></SelectContent>
+        </Select>
         <Button variant="outline" onClick={load}>Search</Button>
       </div>
 
@@ -465,7 +481,7 @@ export default function Machines() {
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr className="text-left">
-              <th className="px-2 py-2">Code</th><th className="px-2 py-2">Model</th><th className="px-2 py-2">Category</th><th className="px-2 py-2">HSN</th>
+              <th className="px-2 py-2">Code</th><th className="px-2 py-2">Model</th><th className="px-2 py-2">Category</th><th className="px-2 py-2">Type</th><th className="px-2 py-2">HSN</th>
               <th className="px-2 py-2">Status</th><th className="px-2 py-2">Parts</th>
               <th className="px-2 py-2">Buy</th><th className="px-2 py-2">Sale</th><th className="px-2 py-2">Tax</th>
               {extended && <th className="px-2 py-2">Extra→Cust</th>}
@@ -475,14 +491,17 @@ export default function Machines() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td className="p-4 text-muted-foreground" colSpan={extended ? 12 : 10}>Loading…</td></tr>
+              <tr><td className="p-4 text-muted-foreground" colSpan={extended ? 13 : 11}>Loading…</td></tr>
             ) : machines.length === 0 ? (
-              <tr><td className="p-4 text-muted-foreground" colSpan={extended ? 12 : 10}>No machines yet. Add one to get started.</td></tr>
+              <tr><td className="p-4 text-muted-foreground" colSpan={extended ? 13 : 11}>No machines yet. Add one to get started.</td></tr>
             ) : machines.map((m) => (
               <tr key={m.id} className="border-t">
                 <td className="px-2 py-2 font-medium">{m.code}</td>
                 <td className="px-2 py-2">{m.model || "—"}</td>
                 <td className="px-2 py-2">{m.category || "—"}</td>
+                <td className="px-2 py-2">
+                  <span className={`inline-block rounded px-2 py-0.5 text-xs capitalize ${(m.machine_type ?? "brand") === "local" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>{m.machine_type ?? "brand"}</span>
+                </td>
                 <td className="px-2 py-2">{m.hsn || "—"}</td>
                 <td className="px-2 py-2">
                   <Select value={m.status} onValueChange={(v) => handleStatus(m, v as MachineStatus)}>

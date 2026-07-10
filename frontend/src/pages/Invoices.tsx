@@ -27,6 +27,7 @@ import {
 } from "@/lib/invoiceTemplatePdf";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 import { stateFromGstin } from "@/lib/gstState";
+import { downloadCashBill } from "@/lib/srivariScalesPdf";
 import { settingsApi } from "@/lib/api/settings";
 
 interface InvoiceItem {
@@ -943,6 +944,40 @@ const viewInvoice = async (inv: Invoice) => {
     }
   };
 
+  // Cash Bill (R5) — the Sri Vari cash-bill document for cash/service sales.
+  // Wired here so a cash-category invoice can produce its cash bill directly.
+  const downloadCashBillForInvoice = async (inv: Invoice) => {
+    const numId = inv._invoiceId;
+    if (!numId) { toast.error("Invoice ID missing"); return; }
+    try {
+      setDownloadBusy(true);
+      const full = await apiFetch<{ success: boolean; data: ApiInvoiceRow }>(`/admin/invoices/${numId}`);
+      const d = full.data;
+      const items = d.items ?? [];
+      const description = items.length
+        ? items.map((it) => it.description).filter(Boolean).join(", ")
+        : "ELECTRONIC WEIGHING SCALE SERVICE";
+      const qtyTotal = items.reduce((s, it) => s + Number(it.quantity || 0), 0);
+      const to = [d.customer_name, d.customer_address, d.customer_city].filter(Boolean).join(", ");
+      const cell = addressLines(d.customer_email); // reuse: often blank; kept minimal
+      downloadCashBill({
+        refNo: d.invoice_number,
+        date: (d.invoice_date || d.created_at || "").slice(0, 10).split("-").reverse().join("."),
+        to,
+        cellNo: cell.replace(/\n/g, " ").trim() || undefined,
+        description,
+        qty: qtyTotal ? `${qtyTotal}NO` : "1NO",
+        amount: Number(d.subtotal ?? d.total ?? 0),
+        total: Number(d.total ?? d.subtotal ?? 0),
+      });
+      toast.success(`Cash bill ${d.invoice_number}.pdf`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Cash bill failed");
+    } finally {
+      setDownloadBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <MachineAlertsBanner />
@@ -1774,9 +1809,16 @@ const viewInvoice = async (inv: Invoice) => {
                 <span className={`text-xs px-3 py-1 rounded-full font-medium ${paymentStatusColors[selected.paymentStatus] ?? "bg-muted text-muted-foreground"}`}>
                   {selected.paymentStatus}
                 </span>
-                <Button size="sm" onClick={() => downloadInvoice(selected)} disabled={downloadBusy} className="gap-1.5">
-                  {downloadBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Download PDF
-                </Button>
+                <div className="flex gap-2">
+                  {selected.paymentMethod === "Cash" && (
+                    <Button size="sm" variant="outline" onClick={() => downloadCashBillForInvoice(selected)} disabled={downloadBusy} className="gap-1.5" title="Sri Vari Cash Bill (cash sale)">
+                      <IndianRupee className="h-3.5 w-3.5" /> Cash Bill
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={() => downloadInvoice(selected)} disabled={downloadBusy} className="gap-1.5">
+                    {downloadBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Download PDF
+                  </Button>
+                </div>
               </div>
             </div>
           )}
