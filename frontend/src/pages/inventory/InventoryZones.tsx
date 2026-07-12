@@ -171,7 +171,7 @@ export default function InventoryZones() {
 
       {/* Add / Edit modal */}
       <Dialog open={modalOpen} onOpenChange={(v) => !save.isPending && setModalOpen(v)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Warehouse className="h-5 w-5" /> {editing ? "Edit Zone" : "Add Zone"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Zone Name *" className="col-span-2"><Input value={form.zone_name} onChange={(e) => setForm({ ...form, zone_name: e.target.value })} /></Field>

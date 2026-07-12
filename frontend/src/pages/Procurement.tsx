@@ -350,7 +350,7 @@ export default function Procurement() {
 
       {/* ── Reject reason ── */}
       <Dialog open={!!rejecting} onOpenChange={(v) => !v && setRejecting(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Reject {rejecting?.pr_number}</DialogTitle></DialogHeader>
           <Field label="Reason"><Textarea rows={3} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Why is this being rejected?" /></Field>
           <DialogFooter className="gap-2">

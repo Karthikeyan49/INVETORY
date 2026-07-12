@@ -290,7 +290,7 @@ export default function InventoryProducts() {
 
       {/* Zone breakdown modal */}
       <Dialog open={!!zonesProduct} onOpenChange={(v) => !v && setZonesProduct(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Layers className="h-5 w-5 text-primary" />
@@ -332,7 +332,7 @@ export default function InventoryProducts() {
 
       {/* Delete confirmation */}
       <Dialog open={!!deleting} onOpenChange={(v) => !v && setDeleting(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Delete product?</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
             This soft-deletes <span className="font-medium text-foreground">{deleting?.name}</span> ({deleting?.sku}). It will no longer appear in inventory lists.

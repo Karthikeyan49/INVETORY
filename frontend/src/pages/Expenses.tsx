@@ -443,7 +443,7 @@ export default function Expenses() {
 
       {/* Add/Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Expense" : "Add Expense"}</DialogTitle>
             <DialogDescription>Snap a photo of the bill — we'll auto-fill the details. You can edit before saving.</DialogDescription>

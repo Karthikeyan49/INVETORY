@@ -202,7 +202,7 @@ export default function Incentives() {
 
       {/* Add / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>{editingId ? "Edit Incentive" : "New Incentive"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -269,7 +269,7 @@ export default function Incentives() {
 
       {/* Pay dialog */}
       <Dialog open={!!payFor} onOpenChange={(o) => !o && setPayFor(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Pay incentive — {payFor?.person_name}</DialogTitle></DialogHeader>
           {payFor && (
             <div className="space-y-3">

@@ -301,7 +301,7 @@ export default function Machines() {
 
       {/* Add / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>{editingId ? "Edit Machine" : "New Machine"}</DialogTitle></DialogHeader>
           <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
             <div>
@@ -600,7 +600,7 @@ export default function Machines() {
 
       {/* Convert chooser — challan or invoice */}
       <Dialog open={!!convertFor} onOpenChange={(o) => !o && setConvertFor(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Convert {convertFor?.code}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">What would you like to create from this machine?</p>
           <div className="grid grid-cols-2 gap-2 pt-2">

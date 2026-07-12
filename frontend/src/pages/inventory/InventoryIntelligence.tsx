@@ -274,14 +274,14 @@ export default function InventoryIntelligence() {
 
       {/* Smart PO Draft modal */}
       <Dialog open={!!poDraft} onOpenChange={(v) => !v && setPoDraft(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           {poDraft && <PoDraftContent r={poDraft} onClose={() => setPoDraft(null)} />}
         </DialogContent>
       </Dialog>
 
       {/* Health detail modal */}
       <Dialog open={!!healthDetail} onOpenChange={(v) => !v && setHealthDetail(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           {healthDetail && (
             <>
               <DialogHeader>

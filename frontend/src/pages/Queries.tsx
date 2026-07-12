@@ -153,7 +153,7 @@ export default function Queries() {
 
       {/* View / Reply Dialog */}
       <Dialog open={!!viewQuery} onOpenChange={open => !open && setViewQuery(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Query {viewQuery?.id}</DialogTitle>
             <DialogDescription>View and respond to customer query</DialogDescription>

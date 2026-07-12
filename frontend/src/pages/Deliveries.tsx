@@ -354,7 +354,7 @@ export default function Deliveries() {
 
       {/* Convert challan → invoice (R4) — include-extra checkbox for extended login */}
       <Dialog open={!!convertFor} onOpenChange={(o) => !o && setConvertFor(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Convert {convertFor?.challan_no} to Invoice</DialogTitle></DialogHeader>
           {convertFor && (
             <div className="space-y-3 text-sm">

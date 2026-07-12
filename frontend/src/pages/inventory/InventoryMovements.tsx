@@ -153,7 +153,7 @@ function AllMovements() {
       </div>
 
       <Dialog open={!!detail} onOpenChange={(v) => !v && setDetail(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           {detail && (
             <>
               <DialogHeader><DialogTitle className="flex items-center gap-2"><MovementTypeBadge type={detail.movement_type} /> Movement #{detail.movement_id}</DialogTitle></DialogHeader>
@@ -432,7 +432,7 @@ function PendingApprovals() {
       </div>
 
       <Dialog open={!!decision} onOpenChange={(v) => !v && setDecision(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>{decision?.kind === "approve" ? "Approve" : "Reject"} movement #{decision?.movement.movement_id}</DialogTitle></DialogHeader>
           <Field label={decision?.kind === "reject" ? "Reason (required, min 10 chars)" : "Remarks (optional)"}>
             <Textarea rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)} />

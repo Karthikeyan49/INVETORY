@@ -486,7 +486,7 @@ function NewVersionDialog({ sop, onDone }: { sop: Sop; onDone: () => void }) {
   };
 
   return (
-    <DialogContent className="max-w-lg">
+    <DialogContent className="max-w-2xl">
       <DialogHeader>
         <DialogTitle>Upload New Version — {sop.code}</DialogTitle>
         <DialogDescription>Add a revised version. It will go to Pending Approval.</DialogDescription>

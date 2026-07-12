@@ -1073,7 +1073,7 @@ export default function Employees() {
       </Dialog>
 
       <Dialog open={!!qrFor} onOpenChange={(o) => !o && setQrFor(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           {qrFor && (
             <>
               <DialogHeader>

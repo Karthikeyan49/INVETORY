@@ -227,7 +227,7 @@ export default function Dealers() {
           <p className="text-muted-foreground">Users registered as "Dealer" in the mobile app</p>
         </div>
         <Dialog open={addOpen} onOpenChange={v => { setAddOpen(v); if (v) setForm({ ...emptyDealer }); }}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create Dealer Credentials</DialogTitle>
               <DialogDescription>Set up a new dealer with phone number login.</DialogDescription>
@@ -240,7 +240,7 @@ export default function Dealers() {
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Dealer</DialogTitle>
             <DialogDescription>Update dealer information.</DialogDescription>
@@ -251,7 +251,7 @@ export default function Dealers() {
 
       {/* View Dialog */}
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Dealer Details</DialogTitle>
             <DialogDescription>Profile filled by user in the mobile app</DialogDescription>
@@ -352,7 +352,7 @@ export default function Dealers() {
       </Dialog>
       {/* Credentials Sent Success Dialog */}
       <Dialog open={successOpen} onOpenChange={setSuccessOpen}>
-        <DialogContent className="max-w-sm text-center">
+        <DialogContent className="max-w-lg text-center">
           <div className="flex flex-col items-center gap-4 py-4">
             <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
               <CheckCircle className="h-8 w-8 text-primary" />

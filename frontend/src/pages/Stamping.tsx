@@ -269,7 +269,7 @@ export default function Stamping() {
 
       {/* Renew dialog — ask the date stamping was done; next renewal = +1 year from it */}
       <Dialog open={!!renewFor} onOpenChange={(o) => !o && setRenewFor(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Renew stamping — {renewFor?.machine_code}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">Enter the date the stamping was done. The next renewal is set to one year from this date.</p>

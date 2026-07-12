@@ -171,7 +171,7 @@ export default function QuoteRequests() {
 
       {/* View Dialog */}
       <Dialog open={!!viewQuote} onOpenChange={open => !open && setViewQuote(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Calculator className="h-5 w-5 text-primary" /> {viewQuote?.id}

@@ -533,7 +533,7 @@ export default function Tasks() {
 
       {/* Add/Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editing ? `Edit ${editing.id}` : "New Task"}</DialogTitle>
             <DialogDescription>Assign work to an employee with a due date and priority.</DialogDescription>

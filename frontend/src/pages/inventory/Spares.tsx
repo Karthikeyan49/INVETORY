@@ -229,7 +229,7 @@ export default function Spares() {
 
       {/* Add / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>{editingId ? "Edit Spare" : "New Spare"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -286,7 +286,7 @@ export default function Spares() {
 
       {/* Move stock dialog */}
       <Dialog open={!!moveFor} onOpenChange={(o) => !o && setMoveFor(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Move stock — {moveFor?.name}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">

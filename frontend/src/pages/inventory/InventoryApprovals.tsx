@@ -193,7 +193,7 @@ export default function InventoryApprovals() {
 
       {/* Detail modal */}
       <Dialog open={!!detail} onOpenChange={(v) => !v && setDetail(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           {detail && (
             <>
               <DialogHeader>
@@ -223,7 +223,7 @@ export default function InventoryApprovals() {
 
       {/* Decision modal */}
       <Dialog open={!!decision} onOpenChange={(v) => !v && setDecision(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>{decision?.kind === "approve" ? "Approve" : "Reject"} approval #{decision?.approval.approval_id}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">{decision?.approval.product ?? `Movement #${decision?.approval.movement_id}`}</p>
           <Field label={decision?.kind === "reject" ? "Reason (required, min 10 chars)" : "Remarks (optional)"}>

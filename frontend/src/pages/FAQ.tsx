@@ -182,7 +182,7 @@ export default function FAQPage() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editFaq ? "Edit FAQ" : "Add FAQ"}</DialogTitle>
             <DialogDescription>{editFaq ? "Update the question and answer" : "Add a new FAQ for the mobile app"}</DialogDescription>

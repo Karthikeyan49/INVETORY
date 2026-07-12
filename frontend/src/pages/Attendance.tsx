@@ -1040,7 +1040,7 @@ export default function Attendance() {
 
       {/* Manual Entry / Edit dialog */}
       <Dialog open={manualOpen} onOpenChange={(o) => { if (!saving) setManualOpen(o); }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>{editEntry ? "Edit Attendance" : "Manual Attendance Entry"}</DialogTitle>
             <DialogDescription>

@@ -218,7 +218,7 @@ export default function DealerPortal() {
 
       {/* Add / edit customer */}
       <Dialog open={custOpen} onOpenChange={(v) => !saveCustomer.isPending && setCustOpen(v)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>{editing ? "Edit customer" : "Add customer"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <F label="Name *" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></F>
