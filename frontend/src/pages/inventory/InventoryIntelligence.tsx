@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CalendarX, Clock, FileDown, PackageX, Printer, ShieldAlert, TrendingDown } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip, Legend } from "recharts";
+import { AlertTriangle, Brain, CalendarX, Clock, FileDown, PackageX, Printer, ShieldAlert, TrendingDown } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,7 +11,7 @@ import { HealthScoreBadge } from "@/components/inventory/HealthScoreBadge";
 import { MovementTypeBadge } from "@/components/inventory/MovementTypeBadge";
 import {
   getIntelligenceSummary, getHealthScores, getDeadStock, getRunoutPredictions,
-  getAbnormalMovements, getExpiringBatches,
+  getAbnormalMovements, getExpiringBatches, getDemandForecast,
   type HealthScore, type RunoutPrediction,
 } from "@/lib/api/inventory";
 
@@ -106,6 +106,11 @@ export default function InventoryIntelligence() {
             </div>
           </div>
         </div>
+      </Section>
+
+      {/* Section 1b — AI Demand Forecast (TimesFM) */}
+      <Section title="AI Demand Forecast (TimesFM)" icon={Brain}>
+        <ForecastPanel products={health.data ?? []} loading={health.isLoading} />
       </Section>
 
       {/* Section 2 — Dead Stock */}
@@ -379,6 +384,113 @@ function PoDraftContent({ r, onClose }: { r: RunoutPrediction; onClose: () => vo
         <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
       </div>
     </>
+  );
+}
+
+function ForecastPanel({ products, loading }: { products: HealthScore[]; loading: boolean }) {
+  const [productId, setProductId] = useState<number | null>(null);
+  const selectId = productId ?? products[0]?.product_id ?? null;
+
+  const forecast = useQuery({
+    queryKey: ["inv", "forecast", selectId],
+    queryFn: () => getDemandForecast(selectId as number),
+    enabled: selectId !== null,
+  });
+
+  const f = forecast.data;
+
+  // History (last 60 days) + forecast joined into one continuous series for charting.
+  const chartData = useMemo(() => {
+    if (!f) return [] as { label: string; history: number | null; forecast: number | null }[];
+    const histLen = f.history.length;
+    const from = Math.max(0, histLen - 60);
+    const hist = f.history.slice(from).map((v, i) => ({
+      label: (f.dates[from + i] ?? "").slice(5), // MM-DD
+      history: Math.round(v * 100) / 100,
+      forecast: null as number | null,
+    }));
+    // Bridge point so the two lines connect at "today".
+    const bridge = hist.length ? hist[hist.length - 1].history : null;
+    const fut = f.daily_forecast.map((v, i) => ({
+      label: `+${i + 1}d`,
+      history: null as number | null,
+      forecast: Math.round(v * 100) / 100,
+    }));
+    if (fut.length) fut[0] = { ...fut[0], history: bridge };
+    return [...hist, ...fut];
+  }, [f]);
+
+  if (loading) return <p className="px-3 py-8 text-center text-sm text-muted-foreground">Loading products…</p>;
+  if (products.length === 0) return <Empty text="No products scored yet — forecasts appear once movement history exists." />;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-sm text-muted-foreground">Product</label>
+        <select
+          className="rounded-lg border bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+          value={selectId ?? ""}
+          onChange={(e) => setProductId(Number(e.target.value))}
+        >
+          {products.map((p) => (
+            <option key={p.product_id} value={p.product_id}>{p.product_name} — {p.sku}</option>
+          ))}
+        </select>
+        {f && (
+          <Badge className={cn("border-transparent", f.source === "timesfm" ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600")}>
+            {f.source === "timesfm" ? "AI · TimesFM" : "Fallback · average"}
+          </Badge>
+        )}
+      </div>
+
+      {forecast.isLoading ? (
+        <p className="px-3 py-8 text-center text-sm text-muted-foreground">Forecasting…</p>
+      ) : forecast.isError ? (
+        <Empty text="Could not load the forecast for this product." />
+      ) : f ? (
+        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="rounded-xl border bg-card p-4 shadow-sm">
+            <p className="mb-2 text-xs text-muted-foreground">Daily consumption — last 60 days (solid) &amp; next {f.forecast_horizon} days (dashed)</p>
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" minTickGap={24} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <RTooltip />
+                <Line type="monotone" dataKey="history" name="Actual" stroke="#64748b" strokeWidth={2} dot={false} connectNulls />
+                <Line type="monotone" dataKey="forecast" name="Forecast" stroke="#7c3aed" strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="grid grid-cols-2 gap-3 self-start">
+            <Kpi label="Current stock" value={qty(f.current_stock)} />
+            <Kpi label="Lead time" value={`${f.lead_time_days}d`} />
+            <Kpi label="Lead-time demand" value={qty(f.lead_time_demand)} />
+            <Kpi label="Reorder point" value={qty(f.reorder_point)} />
+            <Kpi label="Suggested order" value={qty(f.suggested_qty)} accent={f.suggested_qty > 0} />
+            <Kpi
+              label="Days to stockout"
+              value={f.days_until_stockout !== null ? `${f.days_until_stockout}d` : "> horizon"}
+              accent={f.days_until_stockout !== null && f.days_until_stockout < f.lead_time_days}
+            />
+            <div className="col-span-2">
+              <Badge className={cn("border-transparent", f.needs_reorder ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700")}>
+                {f.needs_reorder ? "Reorder now — stock at/below reorder point" : "Stock healthy — no reorder needed"}
+              </Badge>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Kpi({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="rounded-lg border bg-card p-3 shadow-sm">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={cn("mt-1 text-lg font-bold", accent ? "text-red-600" : "text-card-foreground")}>{value}</p>
+    </div>
   );
 }
 

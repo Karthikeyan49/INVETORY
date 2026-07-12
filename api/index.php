@@ -88,11 +88,13 @@ require_once ROOT_PATH . '/services/SmartAllocationEngine.php';
 require_once ROOT_PATH . '/services/MovementEngine.php';
 require_once ROOT_PATH . '/services/InventoryIntelligence.php';
 require_once ROOT_PATH . '/services/ReorderIntelligence.php';
+require_once ROOT_PATH . '/services/DemandForecast.php';
 require_once ROOT_PATH . '/services/ApprovalWorkflow.php';
 require_once ROOT_PATH . '/services/GstinLookupService.php';
 require_once ROOT_PATH . '/helpers/JWT.php';
 require_once ROOT_PATH . '/helpers/Validator.php';
 require_once ROOT_PATH . '/helpers/InventoryPermissions.php';
+require_once ROOT_PATH . '/helpers/TimesFmClient.php';
 require_once ROOT_PATH . '/middleware/AuthMiddleware.php';
 
 require_once ROOT_PATH . '/models/User.php';
@@ -526,6 +528,7 @@ $router->get('/admin/inventory/reorder/consumption/{id}',             [ReorderIn
 $router->get('/admin/inventory/reorder/top-dealers',                  [ReorderIntelligenceController::class, 'getTopDealers'],           'admin:owner,store_keeper,accountant');
 $router->get('/admin/inventory/reorder/top-departments',              [ReorderIntelligenceController::class, 'getTopDepartments'],       'admin:owner,store_keeper,accountant');
 $router->get('/admin/inventory/reorder/heatmap/{productId}',          [ReorderIntelligenceController::class, 'getHeatmap'],              'admin:owner,store_keeper,accountant');
+$router->get('/admin/inventory/reorder/forecast/{productId}',         [ReorderIntelligenceController::class, 'getForecast'],             'admin:owner,store_keeper,accountant');
 
 // Smart Inventory — Approval Workflow (static routes + {id}/action before {id})
 $router->get('/admin/inventory/approvals',                    [InventoryApprovalController::class, 'index'],     'admin:owner,store_keeper,accountant');

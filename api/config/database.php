@@ -34,4 +34,11 @@ define('GEMINI_API_KEY',     $_env['gemini_api_key']     ?? '');
 define('GROQ_API_KEY',       $_env['groq_api_key']       ?? '');
 define('GROQ_API_KEY_NEW',   $_env['groq_api_key_new']   ?? '');
 
+// TimesFM demand-forecast microservice. Override with timesfm_url in .env.
+// When the service runs on a different host (e.g. AWS VPS) it must be reached over
+// the network — set timesfm_url to that host and timesfm_token to a shared secret
+// so the exposed endpoint is authenticated. Leave the token blank for localhost.
+define('TIMESFM_URL',        $_env['timesfm_url']        ?? 'http://127.0.0.1:8600');
+define('TIMESFM_TOKEN',      $_env['timesfm_token']      ?? '');
+
 unset($_envPath, $_env, $_line, $_k, $_v, $_required);

@@ -290,6 +290,58 @@ export default function MachineIssues() {
       </div>
 
       <EditIssueDialog row={editRow} stages={stages} onClose={() => setEditRow(null)} onSaved={() => { setEditRow(null); load(); }} />
+
+      <Dialog open={!!confirmStep} onOpenChange={(o) => !o && setConfirmStep(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmStep?.isLast ? "Complete repair?" : `Move to “${confirmStep?.stage}”?`}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {confirmStep?.isLast
+              ? `This marks the repair finished and returns ${confirmStep?.issue.machine_code ?? "the machine"} to the Machines page.`
+              : `Update the repair stage for ${confirmStep?.issue.machine_code ?? "this machine"} to “${confirmStep?.stage}”.`}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmStep(null)}>Cancel</Button>
+            <Button onClick={applyStep} disabled={stepSaving}>{stepSaving ? "Saving…" : "Confirm"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/** Horizontal stage tracker — click a stage to advance the repair (last stage completes it). */
+function IssueStepper({ issue, stages, onPick }: {
+  issue: MachineIssue; stages: string[]; onPick: (stage: string, isLast: boolean) => void;
+}) {
+  const done = issue.status === "resolved";
+  const currentIndex = done ? stages.length - 1 : Math.max(0, stages.indexOf(issue.process ?? ""));
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap pt-1">
+      {stages.map((s, i) => {
+        const isLast = i === stages.length - 1;
+        const reached = i <= currentIndex;
+        const isCurrent = !done && i === currentIndex;
+        return (
+          <Fragment key={s}>
+            {i > 0 && <span className={`h-px w-4 ${reached ? "bg-primary/60" : "bg-muted-foreground/25"}`} />}
+            <button
+              type="button"
+              disabled={done}
+              onClick={() => onPick(s, isLast)}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition disabled:cursor-default
+                ${isCurrent ? "border-primary bg-primary text-primary-foreground"
+                  : reached ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-muted-foreground/25 text-muted-foreground hover:border-primary/50 hover:text-foreground"}`}
+            >
+              {reached && !isCurrent && <Check className="h-3 w-3" />}
+              {s}
+            </button>
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

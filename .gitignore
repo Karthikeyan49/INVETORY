@@ -19,3 +19,12 @@ node_modules/
 .vscode/sftp.json
 sftp.json
 **/sftp.json
+
+offline_timesfm/
+create_offline_timesfm.py
+offline_timesfm.zip
+offline_timesfm.zip.part00
+offline_timesfm.zip.part01
+.vscode/
+.codex/
+.agents/

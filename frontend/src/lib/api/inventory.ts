@@ -216,6 +216,28 @@ export interface ReorderSuggestion {
   created_at: string;
 }
 
+export interface DemandForecast {
+  product_id: number;
+  product: string;
+  sku: string;
+  /** 'timesfm' when the AI model was used, 'average' when it fell back. */
+  source: "timesfm" | "average";
+  current_stock: number;
+  lead_time_days: number;
+  forecast_horizon: number;
+  lead_time_demand: number;
+  safety_stock: number;
+  reorder_point: number;
+  suggested_qty: number;
+  needs_reorder: boolean;
+  days_until_stockout: number | null;
+  /** Predicted daily demand for the next `forecast_horizon` days. */
+  daily_forecast: number[];
+  /** Zero-filled historical daily outflow, oldest → newest. */
+  history: number[];
+  dates: string[];
+}
+
 export interface DealerDemandProfile {
   demand_id: number;
   dealer_id: number;
@@ -346,6 +368,10 @@ export const generateReorderSuggestions = () =>
 
 export const getDealerDemandProfiles = () =>
   get<DealerDemandProfile[]>("/admin/inventory/reorder/dealer-demand");
+
+/** AI demand forecast (TimesFM) + forecast-aware reorder analysis for one product. */
+export const getDemandForecast = (productId: number) =>
+  get<DemandForecast>(`/admin/inventory/reorder/forecast/${productId}`);
 
 // ── Approvals ───────────────────────────────────────────────────────────────
 

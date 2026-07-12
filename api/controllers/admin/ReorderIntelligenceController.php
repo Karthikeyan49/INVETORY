@@ -224,4 +224,28 @@ class ReorderIntelligenceController
         $engine = new ReorderIntelligence();
         Response::success($engine->getConsumptionHeatmap($productId));
     }
+
+    // ── AI Demand Forecast (TimesFM) ──────────────────────────────────────────
+
+    /**
+     * GET /admin/inventory/reorder/forecast/{productId}
+     *
+     * Forecast-aware reorder analysis for one product using the TimesFM model:
+     * projected daily demand, demand over lead time, reorder point, suggested
+     * quantity, and days-until-stockout. Falls back to a recent average (source
+     * = 'average') when the model service is unavailable or history is thin.
+     */
+    public function getForecast(Request $request): void
+    {
+        $productId = (int)$request->param('productId');
+        if ($productId <= 0) {
+            Response::error('Invalid product ID', 400);
+        }
+        if (InventoryProduct::findById($productId) === null) {
+            Response::error('Product not found', 404);
+        }
+
+        $service = new DemandForecast();
+        Response::success($service->reorderForecast($productId));
+    }
 }

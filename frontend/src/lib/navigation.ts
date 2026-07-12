@@ -34,6 +34,7 @@ import {
   BellRing,
   Truck,
   Wrench,
+  Brain,
 } from "lucide-react";
 
 export type MenuItem = { title: string; url: string; icon: typeof LayoutDashboard };
@@ -54,11 +55,13 @@ export const sections: MenuSection[] = [
       { title: "Spares",         url: "/spares",         icon: Wrench },
       { title: "Stamping",       url: "/stamping",       icon: Stamp },
       { title: "Movements",      url: "/movements", icon: ArrowLeftRight },
+      { title: "Demand Forecast", url: "/inventory/intelligence", icon: Brain },
     ],
   },
   {
     label: "Sales",
     items: [
+      { title: "Customers", url: "/customers", icon: Users },
       { title: "Orders", url: "/orders", icon: ShoppingCart },
       { title: "Invoices", url: "/invoices", icon: FileText },
       { title: "Delivery Challans", url: "/deliveries", icon: Truck },
