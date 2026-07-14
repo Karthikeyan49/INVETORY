@@ -44,6 +44,20 @@ class RateLimitMiddleware
         );
     }
 
+    /**
+     * Strict limiter for OTP send/verify + password reset: 10 attempts / 15 min per IP.
+     * Backs the per-identifier lockout in AuthController against IP-rotation brute force.
+     */
+    public static function otpLimit(): void
+    {
+        self::check(
+            self::clientIp(),
+            'otp',
+            RATE_LIMIT_OTP_MAX,
+            RATE_LIMIT_OTP_WINDOW
+        );
+    }
+
     private static function check(string $ip, string $bucket, int $max, int $window): void
     {
         $windowStart = time() - $window;

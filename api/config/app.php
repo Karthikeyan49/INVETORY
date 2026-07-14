@@ -33,7 +33,10 @@ define('JWT_WEB_ACCESS_EXPIRY',     60 * 60 * 24 * 1);   // 1 day
 define('JWT_WEB_REFRESH_EXPIRY',    60 * 60 * 24 * 7);   // 7 days
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
-define('RATE_LIMIT_REQUESTS',       100); // general: 100 req / 60 s
+// General per-IP limiter. Set generously so shared office NAT IPs (several
+// staff on one public IP) don't trip it; the strict login/register/otp buckets
+// below are what actually stop brute force.
+define('RATE_LIMIT_REQUESTS',       300); // general: 300 req / 60 s per IP
 define('RATE_LIMIT_WINDOW',         60);
 
 define('RATE_LIMIT_LOGIN_MAX',      5);          // 5 login attempts
@@ -41,6 +44,9 @@ define('RATE_LIMIT_LOGIN_WINDOW',   60 * 15);    // per 15 minutes
 
 define('RATE_LIMIT_REGISTER_MAX',   3);          // 3 register attempts
 define('RATE_LIMIT_REGISTER_WINDOW', 60 * 60);   // per 1 hour
+
+define('RATE_LIMIT_OTP_MAX',        10);         // 10 OTP send/verify attempts
+define('RATE_LIMIT_OTP_WINDOW',     60 * 15);    // per 15 minutes
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 // Set CORS_ORIGIN in .env — change it there when the admin dashboard domain changes.

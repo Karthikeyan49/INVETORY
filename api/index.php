@@ -96,6 +96,7 @@ require_once ROOT_PATH . '/helpers/Validator.php';
 require_once ROOT_PATH . '/helpers/InventoryPermissions.php';
 require_once ROOT_PATH . '/helpers/TimesFmClient.php';
 require_once ROOT_PATH . '/middleware/AuthMiddleware.php';
+require_once ROOT_PATH . '/middleware/RateLimitMiddleware.php';
 
 require_once ROOT_PATH . '/models/User.php';
 require_once ROOT_PATH . '/models/Product.php';
@@ -866,6 +867,27 @@ $router->post('/chat',              [ChatController::class, 'send'],    'admin')
 $router->get('/chat/history',       [ChatController::class, 'history'], 'admin');
 $router->get('/chat/debug',         [ChatController::class, 'debug'],   'admin:owner'); // diagnostics; also stops leaking key prefix (see ChatController)
 $router->get('/admin/chat/sessions',[ChatController::class, 'sessions'], 'admin');
+
+// --- Rate limiting (before dispatch) ------------------------------------------
+// Strict per-IP buckets on the brute-force surface (login / register / OTP /
+// password reset), plus a general per-IP limiter on everything else. OPTIONS
+// preflights already exited above, so they are never counted.
+$_rlMethod = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+$_rlPath   = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
+$_rlPath   = preg_replace('#^/api#', '', $_rlPath) ?? $_rlPath;
+$_rlPath   = rtrim($_rlPath, '/') ?: '/';
+
+if ($_rlMethod === 'POST') {
+    if ($_rlPath === '/auth/login') {
+        RateLimitMiddleware::loginLimit();
+    } elseif ($_rlPath === '/auth/register') {
+        RateLimitMiddleware::registerLimit();
+    } elseif (in_array($_rlPath, ['/auth/forgot-password', '/auth/send-otp', '/auth/verify-otp', '/auth/reset-password'], true)) {
+        RateLimitMiddleware::otpLimit();
+    }
+}
+RateLimitMiddleware::handle(); // general per-IP limiter
+unset($_rlMethod, $_rlPath);
 
 // Dispatch
 $router->dispatch();

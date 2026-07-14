@@ -265,76 +265,73 @@ class AuthController
             $user = User::findByEmail($identifier);
         }
 
-        // Block non-existing accounts — do NOT send OTP to unknown identifiers
-        if (!$user) {
-            $label = ($type === 'email') ? 'email address' : 'phone number';
-            Response::error('No account found with this ' . $label . '. Please sign up first.', 404);
-        }
+        // Anti-enumeration: NEVER reveal whether the account exists or is active.
+        // Only generate + send an OTP for an existing, active account; otherwise
+        // fall through to the same generic response below.
+        if ($user && (bool) $user['is_active']) {
+            // Generate 6-digit OTP
+            try {
+                $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            } catch (\Exception $e) {
+                // Fail closed — never fall back to a predictable code.
+                error_log('[OTP] CSPRNG unavailable: ' . $e->getMessage());
+                Response::error('Could not generate a secure code. Please try again shortly.', 500);
+            }
 
-        // Block inactive accounts
-        if (!(bool) $user['is_active']) {
-            Response::error('This account is inactive. Please contact support.', 403);
-        }
+            // Delete old unused OTPs for this user
+            Database::execute(
+                'DELETE FROM otp_verifications WHERE user_id = ? AND purpose = ?',
+                [(int) $user['user_id'], 'password_reset']
+            );
 
-        // Generate 6-digit OTP
-        try {
-            $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        } catch (\Exception $e) {
-            $otp = '123456';
-        }
+            Database::execute(
+                "INSERT INTO otp_verifications (user_id, identifier, identifier_type, otp_code, purpose, expires_at)
+                 VALUES (?, ?, ?, ?, 'password_reset', DATE_ADD(NOW(), INTERVAL 10 MINUTE))",
+                [(int) $user['user_id'], $identifier, $type, $otp]
+            );
 
-        // Delete old unused OTPs for this user
-        Database::execute(
-            'DELETE FROM otp_verifications WHERE user_id = ? AND purpose = ?',
-            [(int) $user['user_id'], 'password_reset']
-        );
-
-        Database::execute(
-            "INSERT INTO otp_verifications (user_id, identifier, identifier_type, otp_code, purpose, expires_at)
-             VALUES (?, ?, ?, ?, 'password_reset', DATE_ADD(NOW(), INTERVAL 10 MINUTE))",
-            [(int) $user['user_id'], $identifier, $type, $otp]
-        );
-
-        // Send OTP
-        if ($type === 'email') {
-            @mail($identifier, 'Your Inventory Management System Password Reset OTP', "Your OTP is: $otp. It will expire in 10 minutes.");
-        } elseif ($type === 'phone') {
-            $apiKey = trim(@file_get_contents(ROOT_PATH . '/../fast25sms.txt'), ". \n\r");
-            if ($apiKey) {
-                $curl = curl_init();
-                curl_setopt_array($curl, [
-                    CURLOPT_URL => "https://www.fast2sms.com/dev/bulkV2",
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_ENCODING => "",
-                    CURLOPT_MAXREDIRS => 10,
-                    CURLOPT_TIMEOUT => 30,
-                    CURLOPT_SSL_VERIFYHOST => 0,
-                    CURLOPT_SSL_VERIFYPEER => 0,
-                    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                    CURLOPT_CUSTOMREQUEST => "POST",
-                    CURLOPT_POSTFIELDS => json_encode([
-                        "variables_values" => $otp,
-                        "route" => "otp",
-                        "numbers" => $identifier,
-                    ]),
-                    CURLOPT_HTTPHEADER => [
-                        "authorization: " . $apiKey,
-                        "accept: */*",
-                        "cache-control: no-cache",
-                        "content-type: application/json",
-                    ],
-                ]);
-                @curl_exec($curl);
-                @curl_close($curl);
+            // Send OTP
+            if ($type === 'email') {
+                @mail($identifier, 'Your Inventory Management System Password Reset OTP', "Your OTP is: $otp. It will expire in 10 minutes.");
+            } elseif ($type === 'phone') {
+                $apiKey = trim(@file_get_contents(ROOT_PATH . '/../fast25sms.txt'), ". \n\r");
+                if ($apiKey) {
+                    $curl = curl_init();
+                    curl_setopt_array($curl, [
+                        CURLOPT_URL => "https://www.fast2sms.com/dev/bulkV2",
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_ENCODING => "",
+                        CURLOPT_MAXREDIRS => 10,
+                        CURLOPT_TIMEOUT => 30,
+                        CURLOPT_SSL_VERIFYHOST => 2,     // verify cert hostname
+                        CURLOPT_SSL_VERIFYPEER => true,  // verify cert chain (MITM-safe)
+                        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                        CURLOPT_CUSTOMREQUEST => "POST",
+                        CURLOPT_POSTFIELDS => json_encode([
+                            "variables_values" => $otp,
+                            "route" => "otp",
+                            "numbers" => $identifier,
+                        ]),
+                        CURLOPT_HTTPHEADER => [
+                            "authorization: " . $apiKey,
+                            "accept: */*",
+                            "cache-control: no-cache",
+                            "content-type: application/json",
+                        ],
+                    ]);
+                    @curl_exec($curl);
+                    @curl_close($curl);
+                }
             }
         }
 
+        // Generic response — identical whether or not the account exists.
         Response::success([
             'identifier' => $identifier,
             'identifier_type' => $type,
             'otp_expires_at' => date('Y-m-d\TH:i:s.000\Z', time() + 600),
             'retry_after_seconds' => 60,
-        ], 'OTP sent successfully');
+        ], 'If an account exists for this contact, an OTP has been sent.');
     }
 
 
@@ -381,7 +378,9 @@ class AuthController
         try {
             $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         } catch (\Exception $e) {
-            $otp = '123456';
+            // Fail closed — never fall back to a predictable code.
+            error_log('[OTP] CSPRNG unavailable: ' . $e->getMessage());
+            Response::error('Could not generate a secure code. Please try again shortly.', 500);
         }
 
         // Delete any previous unused OTPs for this identifier + purpose
@@ -415,8 +414,8 @@ class AuthController
                     CURLOPT_ENCODING => "",
                     CURLOPT_MAXREDIRS => 10,
                     CURLOPT_TIMEOUT => 30,
-                    CURLOPT_SSL_VERIFYHOST => 0,
-                    CURLOPT_SSL_VERIFYPEER => 0,
+                    CURLOPT_SSL_VERIFYHOST => 2,     // verify cert hostname
+                    CURLOPT_SSL_VERIFYPEER => true,  // verify cert chain (MITM-safe)
                     CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
                     CURLOPT_CUSTOMREQUEST => "POST",
                     CURLOPT_POSTFIELDS => json_encode([
@@ -475,8 +474,27 @@ class AuthController
             Response::error('OTP has expired. Please request a new one.', 401);
         }
 
-        if ($record['otp_code'] !== $otp) {
-            Response::error('Invalid OTP code', 401);
+        $maxAttempts = (int) ($record['max_attempts'] ?? 5);
+        $attempts    = (int) ($record['attempts'] ?? 0);
+
+        // Lockout: too many wrong tries on this OTP → burn it, force a new one.
+        if ($attempts >= $maxAttempts) {
+            Database::execute(
+                'UPDATE otp_verifications SET is_used = TRUE WHERE otp_id = ?',
+                [(int) $record['otp_id']]
+            );
+            Response::error('Too many incorrect attempts. Please request a new OTP.', 429, ['attempts_remaining' => 0]);
+        }
+
+        // Constant-time comparison; count failures and invalidate at the ceiling.
+        if (!hash_equals((string) $record['otp_code'], (string) $otp)) {
+            $attempts++;
+            $lock = $attempts >= $maxAttempts;
+            Database::execute(
+                'UPDATE otp_verifications SET attempts = ?, is_used = ? WHERE otp_id = ?',
+                [$attempts, $lock ? 1 : 0, (int) $record['otp_id']]
+            );
+            Response::error('Invalid OTP code', 401, ['attempts_remaining' => max(0, $maxAttempts - $attempts)]);
         }
 
         // Success!
@@ -486,11 +504,11 @@ class AuthController
         );
 
         if ($purpose === 'password_reset') {
-            // Issue a special reset token for password reset
-            $resetToken = JWT::encodeAccess(['sub' => $record['user_id'], 'type' => 'password_reset']);
+            // Short-lived (15 min), single-use reset token — NOT a 30-day access token.
+            $resetToken = JWT::encode(['sub' => $record['user_id'], 'type' => 'password_reset'], 900);
             Response::success([
                 'reset_token' => $resetToken,
-                'expires_at' => date('Y-m-d\TH:i:s.000\Z', time() + 600)
+                'expires_at' => date('Y-m-d\TH:i:s.000\Z', time() + 900)
             ], 'OTP verified successfully');
         } else {
             // For general verification (email, phone)
