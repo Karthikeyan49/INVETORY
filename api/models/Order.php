@@ -103,26 +103,41 @@ class Order
      */
     public static function createDirect(string $customerName, float $total, array $meta = []): int
     {
-        $prefix      = Database::fetch("SELECT setting_value FROM settings WHERE setting_key = 'order_prefix'")['setting_value'] ?? 'ES';
-        $count       = Database::count('SELECT COUNT(*) AS cnt FROM orders');
-        $orderNumber = $prefix . date('Ymd') . str_pad((string)($count + 1), 4, '0', STR_PAD_LEFT);
+        $prefix = Database::fetch("SELECT setting_value FROM settings WHERE setting_key = 'order_prefix'")['setting_value'] ?? 'ES';
 
-        return Database::insert(
-            'INSERT INTO orders
-                (user_id, customer_name, order_number, total_amount, delivery_fee, order_status, payment_status,
-                 payment_method, notes, source, created_at)
-             VALUES (NULL, ?, ?, ?, 0, ?, ?, ?, ?, ?, NOW())',
-            [
-                $customerName !== '' ? $customerName : 'Direct Sale',
-                $orderNumber,
-                $total,
-                $meta['order_status']   ?? 'confirmed',
-                ($meta['payment_status'] ?? 'pending') === 'paid' ? 'paid' : 'pending',
-                $meta['payment_method'] ?? null,
-                $meta['notes']          ?? null,
-                $meta['source']         ?? 'invoice',
-            ]
-        );
+        // The order_number column is UNIQUE, so the COUNT(*)+1 sequence can only
+        // ever collide (never duplicate). Retry on the duplicate-key error so two
+        // direct sales created at the same instant don't surface a 500.
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $count       = Database::count('SELECT COUNT(*) AS cnt FROM orders');
+            $orderNumber = $prefix . date('Ymd') . str_pad((string)($count + 1 + $attempt), 4, '0', STR_PAD_LEFT);
+
+            try {
+                return Database::insert(
+                    'INSERT INTO orders
+                        (user_id, customer_name, order_number, total_amount, delivery_fee, order_status, payment_status,
+                         payment_method, notes, source, created_at)
+                     VALUES (NULL, ?, ?, ?, 0, ?, ?, ?, ?, ?, NOW())',
+                    [
+                        $customerName !== '' ? $customerName : 'Direct Sale',
+                        $orderNumber,
+                        $total,
+                        $meta['order_status']   ?? 'confirmed',
+                        ($meta['payment_status'] ?? 'pending') === 'paid' ? 'paid' : 'pending',
+                        $meta['payment_method'] ?? null,
+                        $meta['notes']          ?? null,
+                        $meta['source']         ?? 'invoice',
+                    ]
+                );
+            } catch (PDOException $e) {
+                if ($e->getCode() !== '23000') {
+                    throw $e; // not a duplicate-key error — surface it
+                }
+                // duplicate order_number → recompute with a bumped sequence and retry
+            }
+        }
+
+        throw new AppException('Could not allocate a unique order number', 500);
     }
 
     /**

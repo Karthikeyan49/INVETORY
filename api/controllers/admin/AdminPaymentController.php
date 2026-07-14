@@ -154,9 +154,20 @@ class AdminPaymentController
     private function postPayment(Request $request, ?int $forcedInvoiceId, ?int $forcedPoId): void
     {
         $data = $this->payload($request, $forcedInvoiceId, $forcedPoId);
+        $allowOverpayment = (bool)$request->input('allow_overpayment', false);
 
         Database::beginTransaction();
         try {
+            // Re-check the balance under a row lock INSIDE the transaction. The
+            // first-pass check in payload() runs before this transaction opens
+            // and holds no lock, so two concurrent payments could both pass it
+            // and overpay (TOCTOU). This is the authoritative guard.
+            $violation = $this->balanceViolationLocked($data, $allowOverpayment);
+            if ($violation !== null) {
+                Database::rollBack();
+                Response::error($violation, 422);
+            }
+
             $data['payment_number'] = NumberSequence::next('PAY');
             $data['created_by'] = $this->actorId($request);
             $paymentId = Payment::create($data);
@@ -170,6 +181,42 @@ class AdminPaymentController
         }
 
         Response::success(Payment::findById($paymentId), 'Payment posted', 201);
+    }
+
+    /**
+     * Locks the target invoice/PO row (SELECT ... FOR UPDATE) and re-validates
+     * that this payment/refund does not exceed the current balance. Returns an
+     * error message to abort with, or null when the payment is within bounds.
+     * Must be called inside an open transaction.
+     */
+    private function balanceViolationLocked(array $data, bool $allowOverpayment): ?string
+    {
+        $direction = (string)$data['direction'];
+        $amount    = (float)$data['amount'];
+
+        if (!empty($data['invoice_id'])) {
+            Database::fetch('SELECT invoice_id FROM invoices WHERE invoice_id = ? FOR UPDATE', [(int)$data['invoice_id']]);
+            $fresh = Payment::refreshInvoice((int)$data['invoice_id']);
+            if ($direction === 'in' && !$allowOverpayment && $amount - $fresh['balance_due'] > 0.005) {
+                return 'Payment exceeds invoice balance due';
+            }
+            if ($direction === 'out' && $amount - $fresh['amount_paid'] > 0.005) {
+                return 'Refund exceeds amount paid on this invoice';
+            }
+        }
+
+        if (!empty($data['po_id'])) {
+            Database::fetch('SELECT po_id FROM purchase_orders WHERE po_id = ? FOR UPDATE', [(int)$data['po_id']]);
+            $fresh = Payment::refreshPurchaseOrder((int)$data['po_id']);
+            if ($direction === 'out' && !$allowOverpayment && $amount - $fresh['balance_due'] > 0.005) {
+                return 'Payment exceeds purchase order balance due';
+            }
+            if ($direction === 'in' && $amount - $fresh['amount_paid'] > 0.005) {
+                return 'Vendor refund exceeds amount paid on this purchase order';
+            }
+        }
+
+        return null;
     }
 
     private function payload(Request $request, ?int $forcedInvoiceId, ?int $forcedPoId): array

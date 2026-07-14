@@ -343,41 +343,54 @@ class OrderController
 
         $allocationEngine = new SmartAllocationEngine();
 
-        foreach ($order['items'] as $item) {
-            $invProductId = Database::fetch(
-                'SELECT inv_product_id FROM inventory_products WHERE source_product_id = ? AND is_deleted = 0 LIMIT 1',
-                [(int)$item['product_id']]
-            );
-            if ($invProductId === null) {
-                continue;
+        // Wrap the read-then-reserve loop in a transaction. InventoryStock::
+        // reserveStock() locks the stock row with SELECT ... FOR UPDATE but
+        // requires the caller to be inside a transaction — in autocommit the
+        // lock is released immediately, so concurrent confirmations could each
+        // read the same availability and over-reserve. The transaction makes
+        // the read + reserve atomic.
+        Database::beginTransaction();
+        try {
+            foreach ($order['items'] as $item) {
+                $invProductId = Database::fetch(
+                    'SELECT inv_product_id FROM inventory_products WHERE source_product_id = ? AND is_deleted = 0 LIMIT 1',
+                    [(int)$item['product_id']]
+                );
+                if ($invProductId === null) {
+                    continue;
+                }
+                $invProductId = (int)$invProductId['inv_product_id'];
+                $quantity     = (float)$item['quantity'];
+
+                $stock = Database::fetch(
+                    'SELECT COALESCE(SUM(available_quantity), 0) AS qty FROM inventory_stock WHERE inv_product_id = ? FOR UPDATE',
+                    [$invProductId]
+                );
+                $available = (float)($stock['qty'] ?? 0);
+
+                Database::execute(
+                    "INSERT INTO inventory_dealer_demand (dealer_id, inv_product_id, suggested_reserve_qty, confidence_score, last_order_quantity, last_order_date)
+                     VALUES (?, ?, ?, 50, ?, CURDATE())
+                     ON DUPLICATE KEY UPDATE
+                        suggested_reserve_qty = suggested_reserve_qty + VALUES(suggested_reserve_qty),
+                        last_order_quantity = VALUES(last_order_quantity),
+                        last_order_date = VALUES(last_order_date)",
+                    [$dealerId, $invProductId, $quantity, $quantity]
+                );
+
+                if ($available <= 0) {
+                    continue;
+                }
+
+                $reserveQty = min($available, $quantity);
+                InventoryStock::reserveStock($invProductId, (int)$zone['zone_id'], $reserveQty);
+                InventoryAllocation::updateDealerReservation($dealerId, $invProductId, $reserveQty);
+                InventoryStock::updateHealthScore($invProductId);
             }
-            $invProductId = (int)$invProductId['inv_product_id'];
-            $quantity     = (float)$item['quantity'];
-
-            $stock = Database::fetch(
-                'SELECT COALESCE(SUM(available_quantity), 0) AS qty FROM inventory_stock WHERE inv_product_id = ?',
-                [$invProductId]
-            );
-            $available = (float)($stock['qty'] ?? 0);
-
-            Database::execute(
-                "INSERT INTO inventory_dealer_demand (dealer_id, inv_product_id, suggested_reserve_qty, confidence_score, last_order_quantity, last_order_date)
-                 VALUES (?, ?, ?, 50, ?, CURDATE())
-                 ON DUPLICATE KEY UPDATE
-                    suggested_reserve_qty = suggested_reserve_qty + VALUES(suggested_reserve_qty),
-                    last_order_quantity = VALUES(last_order_quantity),
-                    last_order_date = VALUES(last_order_date)",
-                [$dealerId, $invProductId, $quantity, $quantity]
-            );
-
-            if ($available <= 0) {
-                continue;
-            }
-
-            $reserveQty = min($available, $quantity);
-            InventoryStock::reserveStock($invProductId, (int)$zone['zone_id'], $reserveQty);
-            InventoryAllocation::updateDealerReservation($dealerId, $invProductId, $reserveQty);
-            InventoryStock::updateHealthScore($invProductId);
+            Database::commit();
+        } catch (Throwable $e) {
+            Database::rollBack();
+            throw $e;
         }
     }
 
