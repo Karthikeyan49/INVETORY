@@ -104,10 +104,16 @@ class Request
         if (preg_match('/^Bearer\s+(.+)$/i', $auth, $m)) {
             return trim($m[1]);
         }
-        // 2. Fallback: ?token= query param (for <img> tags that can't send headers)
-        $queryToken = $this->query('token');
-        if ($queryToken !== null && is_string($queryToken) && $queryToken !== '') {
-            return trim($queryToken);
+        // 2. Fallback: ?token= query param, ONLY for GET (e.g. <img>/<a download>
+        //    that can't send an Authorization header). Restricting to GET keeps a
+        //    token that leaks into access logs from being replayed on a
+        //    state-changing request. TODO: migrate file access to short-lived
+        //    signed URLs and drop this fallback entirely.
+        if ($this->method === 'GET') {
+            $queryToken = $this->query('token');
+            if ($queryToken !== null && is_string($queryToken) && $queryToken !== '') {
+                return trim($queryToken);
+            }
         }
         return null;
     }

@@ -146,7 +146,7 @@ class AdminUserController
             'user_type' => 'required|in:customer,dealer',
             'name' => 'required|string|min:2|max:100',
             'phone' => 'required|phone',
-            'password' => 'required|min:6|max:72',
+            'password' => 'required|min:8|max:72',
         ])->validate();
 
         $phone = preg_replace('/\D/', '', (string) $request->input('phone'));

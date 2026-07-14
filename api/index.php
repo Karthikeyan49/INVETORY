@@ -32,10 +32,13 @@ set_exception_handler(function (Throwable $e) {
 
 // --- CORS ---------------------------------------------------------------------
 $_allowedOrigins = array_filter(array_map('trim', explode(',', defined('CORS_ORIGIN') ? CORS_ORIGIN : '')));
-$_allowedOrigins[] = 'http://localhost:8080';
-$_allowedOrigins[] = 'http://localhost:8081';
 $_allowedOrigins[] = 'https://dealer.inventory.com';   // standalone Dealer Portal site
-$_allowedOrigins[] = 'http://localhost:8082';          // dealer dev preview
+// Local dev origins are only trusted outside production.
+if (!defined('APP_ENV') || APP_ENV !== 'production') {
+    $_allowedOrigins[] = 'http://localhost:8080';
+    $_allowedOrigins[] = 'http://localhost:8081';
+    $_allowedOrigins[] = 'http://localhost:8082';      // dealer dev preview
+}
 $_requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
 $_corsHeader = in_array($_requestOrigin, $_allowedOrigins, true) ? $_requestOrigin : ($_allowedOrigins[0] ?? 'https://api.inventory.com');
 header('Access-Control-Allow-Origin: ' . $_corsHeader);

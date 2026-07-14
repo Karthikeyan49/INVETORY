@@ -1,7 +1,6 @@
 <?php
 declare(strict_types=1);
 
-$a=1;
 class AuthController
 {
     // ─── POST /auth/register ─────────────────────────────────────────────────
@@ -294,34 +293,7 @@ class AuthController
             if ($type === 'email') {
                 @mail($identifier, 'Your Inventory Management System Password Reset OTP', "Your OTP is: $otp. It will expire in 10 minutes.");
             } elseif ($type === 'phone') {
-                $apiKey = trim(@file_get_contents(ROOT_PATH . '/../fast25sms.txt'), ". \n\r");
-                if ($apiKey) {
-                    $curl = curl_init();
-                    curl_setopt_array($curl, [
-                        CURLOPT_URL => "https://www.fast2sms.com/dev/bulkV2",
-                        CURLOPT_RETURNTRANSFER => true,
-                        CURLOPT_ENCODING => "",
-                        CURLOPT_MAXREDIRS => 10,
-                        CURLOPT_TIMEOUT => 30,
-                        CURLOPT_SSL_VERIFYHOST => 2,     // verify cert hostname
-                        CURLOPT_SSL_VERIFYPEER => true,  // verify cert chain (MITM-safe)
-                        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                        CURLOPT_CUSTOMREQUEST => "POST",
-                        CURLOPT_POSTFIELDS => json_encode([
-                            "variables_values" => $otp,
-                            "route" => "otp",
-                            "numbers" => $identifier,
-                        ]),
-                        CURLOPT_HTTPHEADER => [
-                            "authorization: " . $apiKey,
-                            "accept: */*",
-                            "cache-control: no-cache",
-                            "content-type: application/json",
-                        ],
-                    ]);
-                    @curl_exec($curl);
-                    @curl_close($curl);
-                }
+                $this->sendSmsOtp($identifier, $otp);
             }
         }
 
@@ -405,34 +377,7 @@ class AuthController
                 "Your OTP is: $otp. It will expire in 10 minutes."
             );
         } elseif ($type === 'phone') {
-            $apiKey = trim(@file_get_contents(ROOT_PATH . '/../fast25sms.txt'), ". \n\r");
-            if ($apiKey) {
-                $curl = curl_init();
-                curl_setopt_array($curl, [
-                    CURLOPT_URL => "https://www.fast2sms.com/dev/bulkV2",
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_ENCODING => "",
-                    CURLOPT_MAXREDIRS => 10,
-                    CURLOPT_TIMEOUT => 30,
-                    CURLOPT_SSL_VERIFYHOST => 2,     // verify cert hostname
-                    CURLOPT_SSL_VERIFYPEER => true,  // verify cert chain (MITM-safe)
-                    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                    CURLOPT_CUSTOMREQUEST => "POST",
-                    CURLOPT_POSTFIELDS => json_encode([
-                        "variables_values" => $otp,
-                        "route" => "otp",
-                        "numbers" => $identifier,
-                    ]),
-                    CURLOPT_HTTPHEADER => [
-                        "authorization: " . $apiKey,
-                        "accept: */*",
-                        "cache-control: no-cache",
-                        "content-type: application/json",
-                    ],
-                ]);
-                @curl_exec($curl);
-                @curl_close($curl);
-            }
+            $this->sendSmsOtp($identifier, $otp);
         }
 
         Response::success([
@@ -553,8 +498,8 @@ class AuthController
             Response::error('Passwords do not match', 400);
         }
 
-        if (strlen($newPass) < 6) {
-            Response::error('Password must be at least 6 characters long', 400);
+        if (strlen($newPass) < 8) {
+            Response::error('Password must be at least 8 characters long', 400);
         }
 
         $userId = (int) $payload['sub'];
@@ -611,6 +556,44 @@ class AuthController
              VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND), NOW())',
             [$userId, hash('sha256', $rawToken), $expirySeconds]
         );
+    }
+
+    /**
+     * Send an OTP over SMS via Fast2SMS. Single source of truth for the SMS
+     * call (endpoint + TLS verification) — used by forgotPassword and sendOtp.
+     * No-op when the API-key file is absent.
+     */
+    private function sendSmsOtp(string $number, string $otp): void
+    {
+        $apiKey = trim(@file_get_contents(ROOT_PATH . '/../fast25sms.txt'), ". \n\r");
+        if ($apiKey === '') {
+            return;
+        }
+        $curl = curl_init();
+        curl_setopt_array($curl, [
+            CURLOPT_URL => "https://www.fast2sms.com/dev/bulkV2",
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => "",
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYHOST => 2,     // verify cert hostname
+            CURLOPT_SSL_VERIFYPEER => true,  // verify cert chain (MITM-safe)
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => "POST",
+            CURLOPT_POSTFIELDS => json_encode([
+                "variables_values" => $otp,
+                "route" => "otp",
+                "numbers" => $number,
+            ]),
+            CURLOPT_HTTPHEADER => [
+                "authorization: " . $apiKey,
+                "accept: */*",
+                "cache-control: no-cache",
+                "content-type: application/json",
+            ],
+        ]);
+        @curl_exec($curl);
+        @curl_close($curl);
     }
     
     /**

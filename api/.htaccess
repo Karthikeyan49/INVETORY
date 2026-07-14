@@ -22,6 +22,7 @@ RewriteRule ^(.*)$ index.php [QSA,L]
     Header always set Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
 </IfModule>
 
-php_flag display_errors on
+# Never render PHP errors to the client (index.php also enforces this at runtime).
+php_flag display_errors off
 php_flag log_errors on
 php_value error_log error_log
