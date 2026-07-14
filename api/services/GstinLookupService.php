@@ -99,8 +99,8 @@ class GstinLookupService
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 10,
             CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => true,  // verify cert chain — GST response drives tax treatment
+            CURLOPT_SSL_VERIFYHOST => 2,     // verify cert hostname
             CURLOPT_HTTPHEADER     => [
                 'Accept: application/json, text/plain, */*',
                 'Accept-Language: en-US,en;q=0.9',

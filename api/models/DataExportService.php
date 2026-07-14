@@ -202,10 +202,25 @@ class DataExportService
             $value = $row[$column] ?? '';
             if (is_string($value)) {
                 $value = html_entity_decode($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                $value = self::csvSafe($value);
             }
             $out[] = $value;
         }
         return $out;
+    }
+
+    /**
+     * Neutralize spreadsheet formula injection. A cell whose first character is
+     * =, +, -, @, TAB or CR is executed as a formula by Excel / Google Sheets
+     * (e.g. =cmd|'/C calc'!A1). Prefix such values with an apostrophe so they
+     * are rendered as literal text instead.
+     */
+    private static function csvSafe(string $value): string
+    {
+        if ($value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+            return "'" . $value;
+        }
+        return $value;
     }
 
     private static function streamZip(array $entries, string $filename): void

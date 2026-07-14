@@ -48,7 +48,11 @@ class OrderController
                 Response::error($e->getMessage(), $e->getCode());
             }
 
-            $unitPrice = isset($item['unit_price']) ? (float)$item['unit_price'] : $product['base_price'];
+            // Server-side price resolution ONLY. A client-supplied unit_price is
+            // never trusted on customer self-service orders — that let a buyer
+            // order a real product at 0.01 or a negative amount. Staff walk-in
+            // orders keep their entered price via storeManual (admin-guarded).
+            $unitPrice = (float)$product['base_price'];
             $size = $item['size'] ?? null;
             $purpose = $item['purpose'] ?? null;
             $subPurpose = $item['sub_purpose'] ?? null;
@@ -58,20 +62,19 @@ class OrderController
                 if (!$config) {
                     Response::error('Configuration not found or inactive for this product', 404);
                 }
-                // Do NOT override price with config price if frontend provided it
-                if (!isset($item['unit_price'])) {
-                    $unitPrice = $config['price'];
-                }
+                $unitPrice = (float)$config['price'];
                 $size = $size ?? $config['size'];
                 $purpose = $purpose ?? $config['purpose'];
                 $subPurpose = $subPurpose ?? ($config['sub_purpose'] ?? null);
             }
 
-            if (!isset($item['unit_price'])) {
-                $resolved = DealerNetwork::resolvePriceForCustomer((int)$request->user['user_id'], $productId, $configId);
-                if ($resolved && ($resolved['source'] ?? '') === 'dealer_price_list') {
-                    $unitPrice = (float)$resolved['price'];
-                }
+            $resolved = DealerNetwork::resolvePriceForCustomer((int)$request->user['user_id'], $productId, $configId);
+            if ($resolved && ($resolved['source'] ?? '') === 'dealer_price_list') {
+                $unitPrice = (float)$resolved['price'];
+            }
+
+            if ($unitPrice < 0) {
+                Response::error('Resolved product price is invalid', 422);
             }
 
             $items[] = [
