@@ -2,8 +2,10 @@ Options -Indexes
 RewriteEngine On
 
 # Block direct access to all non-public directories
-RewriteRule ^(config|core|models|helpers|middleware|database|controllers)/ - [F,L]
+RewriteRule ^(config|core|models|helpers|middleware|database|controllers|tests|migrations)/ - [F,L]
 RewriteRule \.(sql|env|log|md)$ - [F,L]
+# Block the PHP error log (no extension, so the rule above misses it)
+RewriteRule (^|/)error_log$ - [F,L]
 
 # Route all requests to index.php
 RewriteCond %{REQUEST_FILENAME} !-f

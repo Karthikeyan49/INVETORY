@@ -73,9 +73,9 @@ PROMPT;
         // 2. Check GroqClient exists
         $checks['groq_loaded'] = class_exists('GroqClient');
 
-        // 3. Check GROQ_API_KEY
-        $checks['groq_key_set']    = defined('GROQ_API_KEY') && strlen(GROQ_API_KEY) > 10;
-        $checks['groq_key_prefix'] = defined('GROQ_API_KEY') ? substr(GROQ_API_KEY, 0, 8) . '...' : 'NOT SET';
+        // 3. Check GROQ_API_KEY — report only whether it is configured, never any
+        //    bytes of the key itself (the prefix was previously leaked here).
+        $checks['groq_key_set'] = defined('GROQ_API_KEY') && strlen(GROQ_API_KEY) > 10;
 
         // 4. Check DB tables
         try {
