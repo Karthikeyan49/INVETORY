@@ -5,6 +5,16 @@ saas-erp/
 .env.*
 !.env.example
 
+# Database dumps / exports — contain real data (PII, password hashes); never commit.
+# Patterns are scoped so tracked schema/seed files (schema.sql, sample-data.sql,
+# create_*.sql, migration_*.sql) are unaffected.
+database/*ecosudar*.sql
+database/*dump*.sql
+database/*backup*.sql
+*.sql.gz
+api/../fast25sms.txt
+fast25sms.txt
+
 # Build / tool artifacts
 frontend/dist/
 frontend/dist-dealer/
