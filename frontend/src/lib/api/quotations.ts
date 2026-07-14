@@ -16,6 +16,9 @@ export type QuotationItem = {
   qty: number;
   unit?: string;
   specifications?: string;
+  capacity?: string;
+  accuracy?: string;
+  platform_size?: string;
   gst_rate?: number;
   rate: number;
   amount: number;
@@ -25,11 +28,11 @@ export type QuotationItem = {
 export type QuotationStatus = "Draft" | "Sent" | "Accepted" | "Rejected";
 
 export type QuotationKind = "retail" | "industrial" | "service" | "stamping";
-export const QUOTATION_KINDS: { value: QuotationKind; label: string }[] = [
-  { value: "retail", label: "Retail (product selling)" },
-  { value: "industrial", label: "Industrial" },
-  { value: "service", label: "Service" },
-  { value: "stamping", label: "Stamping" },
+export const QUOTATION_KINDS: { value: QuotationKind; label: string; description: string }[] = [
+  { value: "retail", label: "Retail", description: "ESSAE electronic weighing scale sale — Model, Capacity, Accuracy, Platform Size, Basic Price." },
+  { value: "industrial", label: "Industrial", description: "Weighing scale with quantity, delivery schedule & validity — Model, Capacity, Accuracy, Platform Size, Qty, Basic Price." },
+  { value: "service", label: "Service", description: "Repair / service work — just Description, Qty and Price, no machine spec columns." },
+  { value: "stamping", label: "Stamping", description: "Legal stamping / calibration — Model, Capacity, Accuracy, Qty, Unit Price, Basic Price." },
 ];
 
 export type QuotationListRow = {

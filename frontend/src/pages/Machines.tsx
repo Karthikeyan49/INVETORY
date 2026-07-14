@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
@@ -17,6 +18,8 @@ import {
   type MachineMovement,
 } from "@/lib/api/machines";
 import { createIssue } from "@/lib/api/machineIssues";
+import { createPurchase, fetchPurchases } from "@/lib/api/purchases";
+import { fetchVendors, createVendor } from "@/lib/api/vendors";
 
 const STATUSES: MachineStatus[] = ["in_stock", "reserved", "on_delivery", "delivered", "maintenance"];
 const PART_STATUSES = ["present", "missing", "transferred"] as const;
@@ -30,13 +33,35 @@ const statusClass: Record<MachineStatus, string> = {
 };
 
 const emptyForm = {
-  code: "", model: "", category: "", machine_type: "brand" as MachineType, accuracy: "", platform_size: "", capacity: "", hsn: "",
+  code: "", model: "", category: "", machine_type: "brand" as MachineType, brand_name: "", accuracy: "", platform_size: "", capacity: "", hsn: "",
   status: "in_stock" as MachineStatus,
   purchase_date: "", invoice_date: "", stamping_date: "", same_date: false, notes: "",
   buy_price: "", buy_gst_pct: "", sale_price: "", sale_gst_pct: "",
   extra_amount: "", extra_from_vendor: "",
+  vendor_name: "", amount_paid: "", purchase_mode: "credit",
 };
 type FormState = typeof emptyForm;
+
+type SortKey = "newest" | "oldest" | "code_asc" | "code_desc" | "buy_price_desc" | "buy_price_asc";
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "code_asc", label: "Code A–Z" },
+  { value: "code_desc", label: "Code Z–A" },
+  { value: "buy_price_desc", label: "Buy price high–low" },
+  { value: "buy_price_asc", label: "Buy price low–high" },
+];
+function sortMachines(rows: Machine[], sortBy: SortKey): Machine[] {
+  const sorted = [...rows];
+  switch (sortBy) {
+    case "oldest": return sorted.reverse();
+    case "code_asc": return sorted.sort((a, b) => a.code.localeCompare(b.code));
+    case "code_desc": return sorted.sort((a, b) => b.code.localeCompare(a.code));
+    case "buy_price_desc": return sorted.sort((a, b) => Number(b.buy_price ?? 0) - Number(a.buy_price ?? 0));
+    case "buy_price_asc": return sorted.sort((a, b) => Number(a.buy_price ?? 0) - Number(b.buy_price ?? 0));
+    default: return sorted; // newest — API already returns created_at DESC
+  }
+}
 
 function money(v: number | string | null | undefined): string {
   return v == null || v === "" ? "—" : `₹${Number(v).toLocaleString("en-IN")}`;
@@ -63,8 +88,11 @@ export default function Machines() {
   const [statusFilter, setStatusFilter] = useState<MachineStatus | "all">("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<MachineType | "all">("all");
+  const [sortBy, setSortBy] = useState<SortKey>("newest");
 
-  const [catalog, setCatalog] = useState<MachineCatalog>({ models: [], categories: [], accuracies: [], platform_sizes: [], capacities: [], hsns: [], part_names: [] });
+  const [catalog, setCatalog] = useState<MachineCatalog>({ models: [], categories: [], accuracies: [], platform_sizes: [], capacities: [], hsns: [], brand_names: [], part_names: [] });
+  const [vendorSuggestions, setVendorSuggestions] = useState<string[]>([]);
+  const [masterVendorNames, setMasterVendorNames] = useState<string[]>([]);
 
   // Add / Edit dialog (shared form)
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -81,13 +109,19 @@ export default function Machines() {
 
   // Report-issue dialog (reflects on the Machine Issues page)
   const [issueFor, setIssueFor] = useState<Machine | null>(null);
-  const [issueForm, setIssueForm] = useState({ title: "", place: "", process: "Reported" });
+  const [issueForm, setIssueForm] = useState({ title: "", process: "Reported" });
   const [issueSaving, setIssueSaving] = useState(false);
 
   // Movement-history dialog
   const [movesFor, setMovesFor] = useState<Machine | null>(null);
   const [moves, setMoves] = useState<MachineMovement[]>([]);
   const [movesLoading, setMovesLoading] = useState(false);
+
+  // Row-click detail popup — everything about a machine (direct fields + fitted
+  // parts + movement history).
+  const [infoFor, setInfoFor] = useState<Machine | null>(null);
+  const [infoMoves, setInfoMoves] = useState<MachineMovement[]>([]);
+  const [infoLoading, setInfoLoading] = useState(false);
 
   // Convert (challan / invoice) chooser
   const [convertFor, setConvertFor] = useState<Machine | null>(null);
@@ -122,6 +156,12 @@ export default function Machines() {
   }
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [statusFilter, categoryFilter, typeFilter]);
+  // Real-time search — debounced so we don't fire a request on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => load(), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
   useEffect(() => { loadCatalog(); }, []);
 
   // Auto-fill category/HSN/prices when a known model name is chosen (requirement).
@@ -144,11 +184,31 @@ export default function Machines() {
     }));
   }
 
-  function openAdd() { setEditingId(null); setForm(emptyForm); setDialogOpen(true); }
+  // Vendor suggestions for the Add dialog — the vendor master first, plus any
+  // names seen in past Purchases. masterVendorNames tracks which ones already
+  // exist in the master, so on save we only create a vendor when it's new.
+  function loadVendorSuggestions() {
+    Promise.all([
+      fetchVendors({}).then((vs) => vs.map((v) => v.name)).catch(() => [] as string[]),
+      fetchPurchases({}).then(({ rows }) => rows.map((p) => (p.vendor_name || "").trim())).catch(() => [] as string[]),
+    ]).then(([masterNames, purchaseNames]) => {
+      setMasterVendorNames(masterNames);
+      const seen = new Set<string>();
+      const names: string[] = [];
+      for (const name of [...masterNames, ...purchaseNames]) {
+        const n = (name || "").trim();
+        if (!n || seen.has(n.toLowerCase())) continue;
+        seen.add(n.toLowerCase()); names.push(n);
+      }
+      setVendorSuggestions(names.sort((a, b) => a.localeCompare(b)));
+    }).catch(() => {});
+  }
+
+  function openAdd() { setEditingId(null); setForm(emptyForm); setDialogOpen(true); loadVendorSuggestions(); }
   function openEdit(m: Machine) {
     setEditingId(m.id);
     setForm({
-      code: m.code, model: m.model ?? "", category: m.category ?? "", machine_type: m.machine_type ?? "brand",
+      code: m.code, model: m.model ?? "", category: m.category ?? "", machine_type: m.machine_type ?? "brand", brand_name: m.brand_name ?? "",
       accuracy: m.accuracy ?? "", platform_size: m.platform_size ?? "", capacity: m.capacity ?? "", hsn: m.hsn ?? "",
       status: m.status, purchase_date: m.purchase_date ?? "",
       invoice_date: m.invoice_date ?? "", stamping_date: m.stamping_date ?? "",
@@ -160,8 +220,10 @@ export default function Machines() {
       sale_gst_pct: m.sale_gst_pct != null ? String(m.sale_gst_pct) : "",
       extra_amount: m.extra_amount != null ? String(m.extra_amount) : "",
       extra_from_vendor: m.extra_from_vendor != null ? String(m.extra_from_vendor) : "",
+      vendor_name: "", amount_paid: "", purchase_mode: "credit",
     });
     setDialogOpen(true);
+    loadVendorSuggestions();
   }
 
   async function handleSave() {
@@ -174,6 +236,7 @@ export default function Machines() {
     const stampingDate = form.same_date ? form.invoice_date : form.stamping_date;
     const payload: Partial<Machine> & Record<string, unknown> = {
       code: form.code, model: form.model, category: form.category, machine_type: form.machine_type,
+      brand_name: form.machine_type === "brand" ? form.brand_name : null,
       accuracy: form.accuracy, platform_size: form.platform_size, capacity: form.capacity, hsn: form.hsn,
       status: form.status, purchase_date: form.purchase_date,
       invoice_date: form.invoice_date, stamping_date: stampingDate, notes: form.notes,
@@ -184,6 +247,25 @@ export default function Machines() {
     try {
       if (editingId) { await updateMachine(editingId, payload); toast.success("Machine updated"); }
       else { await createMachine(payload); toast.success("Machine created"); }
+      // Best-effort: also record this as a vendor purchase (Purchases page) so
+      // "how much was paid for it" is tracked — only when a vendor was named.
+      if (!editingId && form.vendor_name.trim()) {
+        const vn = form.vendor_name.trim();
+        // Create the vendor in the master too, when it's a name we haven't seen.
+        if (!masterVendorNames.some((s) => s.toLowerCase() === vn.toLowerCase())) {
+          createVendor({ name: vn }).catch(() => {});
+        }
+        createPurchase({
+          vendor_name: vn,
+          purchase_type: form.purchase_mode === "cash" ? "cash" : "credit",
+          taxable: num(form.buy_price) ?? 0,
+          gst_pct: num(form.buy_gst_pct) ?? 0,
+          // Cash = paid in full (backend fills it); credit = advance paid so far.
+          advance: form.purchase_mode === "credit" ? (num(form.amount_paid) ?? 0) : 0,
+          purchase_date: form.purchase_date || undefined,
+          notes: `Machine ${form.code}${form.model ? ` — ${form.model}` : ""}`,
+        }).catch(() => {});
+      }
       setDialogOpen(false); setForm(emptyForm); setEditingId(null);
       load(); loadCatalog();
     } catch (e) {
@@ -205,6 +287,20 @@ export default function Machines() {
 
   async function openParts(m: Machine) {
     try { setDetail(await getMachine(m.id)); } catch (e) { toast.error(e instanceof Error ? e.message : "Could not load parts"); }
+  }
+
+  // Row click → full read-only detail (fields + fitted parts + movement history).
+  async function openDetail(m: Machine) {
+    setInfoFor(m); setInfoMoves([]); setInfoLoading(true);
+    try {
+      const [full, mv] = await Promise.all([
+        getMachine(m.id).catch(() => m),
+        fetchMachineMovements(m.id).catch(() => [] as MachineMovement[]),
+      ]);
+      setInfoFor(full); setInfoMoves(mv);
+    } finally {
+      setInfoLoading(false);
+    }
   }
   async function handleAddPart() {
     if (!detail || !newPart.part_name.trim()) { toast.error("Part name required"); return; }
@@ -242,14 +338,14 @@ export default function Machines() {
   }
 
   // Report an issue from the Machines page — it shows up on the Machine Issues page.
-  function openIssue(m: Machine) { setIssueForm({ title: "", place: "", process: "Reported" }); setIssueFor(m); }
+  function openIssue(m: Machine) { setIssueForm({ title: "", process: "Reported" }); setIssueFor(m); }
   async function submitIssue() {
     if (!issueFor || !issueForm.title.trim()) { toast.error("Describe the issue"); return; }
     setIssueSaving(true);
     try {
       await createIssue({
         machine_id: issueFor.id, title: issueForm.title.trim(),
-        place: issueForm.place.trim() || undefined, process: issueForm.process || undefined,
+        process: issueForm.process || undefined,
       });
       toast.success("Issue reported — see the Machine Issues page");
       setIssueFor(null); load();
@@ -285,6 +381,7 @@ export default function Machines() {
   }
 
   const categories = Array.from(new Set(machines.map((m) => m.category).filter(Boolean))) as string[];
+  const sortedMachines = sortMachines(machines, sortBy);
 
   return (
     <div className="p-6 space-y-6">
@@ -301,7 +398,7 @@ export default function Machines() {
 
       {/* Add / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl">
           <DialogHeader><DialogTitle>{editingId ? "Edit Machine" : "New Machine"}</DialogTitle></DialogHeader>
           <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
             <div>
@@ -310,46 +407,48 @@ export default function Machines() {
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Model (type once, then pick from list)</label>
-              <Input list="ml-models" placeholder="Model" value={form.model} onChange={(e) => onModelChange(e.target.value)} />
-              <datalist id="ml-models">{catalog.models.map((m) => <option key={m.model} value={m.model} />)}</datalist>
+              <Combobox options={catalog.models.map((m) => m.model)} placeholder="Model" value={form.model} onChange={onModelChange} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-muted-foreground">Category</label>
-                <Input list="ml-cats" placeholder="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
-                <datalist id="ml-cats">{catalog.categories.map((c) => <option key={c} value={c} />)}</datalist>
+                <Combobox options={catalog.categories} placeholder="Category" value={form.category} onChange={(v) => setForm({ ...form, category: v })} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">HSN</label>
-                <Input list="ml-hsn" placeholder="HSN" value={form.hsn} onChange={(e) => setForm({ ...form, hsn: e.target.value })} />
-                <datalist id="ml-hsn">{catalog.hsns.map((h) => <option key={h} value={h} />)}</datalist>
+                <Combobox options={catalog.hsns} placeholder="HSN" value={form.hsn} onChange={(v) => setForm({ ...form, hsn: v })} />
               </div>
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Machine Type</label>
-              <Select value={form.machine_type} onValueChange={(v) => setForm({ ...form, machine_type: v as MachineType })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="brand">Brand</SelectItem>
-                  <SelectItem value="local">Local</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground">Machine Type</label>
+                <Select value={form.machine_type} onValueChange={(v) => setForm({ ...form, machine_type: v as MachineType })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="brand">Brand</SelectItem>
+                    <SelectItem value="local">Local</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.machine_type === "brand" && (
+                <div>
+                  <label className="text-xs text-muted-foreground">Which brand? (type once, then pick from list)</label>
+                  <Combobox options={catalog.brand_names} placeholder="e.g. Essae, Avery" value={form.brand_name} onChange={(v) => setForm({ ...form, brand_name: v })} />
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="text-xs text-muted-foreground">Accuracy</label>
-                <Input list="ml-acc" placeholder="e.g. 1g" value={form.accuracy} onChange={(e) => setForm({ ...form, accuracy: e.target.value })} />
-                <datalist id="ml-acc">{catalog.accuracies.map((a) => <option key={a} value={a} />)}</datalist>
+                <Combobox options={catalog.accuracies} placeholder="e.g. 1g" value={form.accuracy} onChange={(v) => setForm({ ...form, accuracy: v })} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Platform size</label>
-                <Input list="ml-plat" placeholder="e.g. 400x400" value={form.platform_size} onChange={(e) => setForm({ ...form, platform_size: e.target.value })} />
-                <datalist id="ml-plat">{catalog.platform_sizes.map((p) => <option key={p} value={p} />)}</datalist>
+                <Combobox options={catalog.platform_sizes} placeholder="e.g. 400x400" value={form.platform_size} onChange={(v) => setForm({ ...form, platform_size: v })} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Capacity</label>
-                <Input list="ml-cap" placeholder="e.g. 50kg" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} />
-                <datalist id="ml-cap">{catalog.capacities.map((c) => <option key={c} value={c} />)}</datalist>
+                <Combobox options={catalog.capacities} placeholder="e.g. 50kg" value={form.capacity} onChange={(v) => setForm({ ...form, capacity: v })} />
               </div>
             </div>
             <div>
@@ -372,9 +471,33 @@ export default function Machines() {
               <div>
                 <label className="text-xs text-muted-foreground">Extra (extended login only)</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input type="number" placeholder="Extra → customer" value={form.extra_amount} onChange={(e) => setForm({ ...form, extra_amount: e.target.value })} />
-                  <Input type="number" placeholder="Extra ← vendor" value={form.extra_from_vendor} onChange={(e) => setForm({ ...form, extra_from_vendor: e.target.value })} />
+                  <div>
+                    <label className="text-xs text-muted-foreground">Extra → customer</label>
+                    <Input type="number" placeholder="0" value={form.extra_amount} onChange={(e) => setForm({ ...form, extra_amount: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Extra ← vendor</label>
+                    <Input type="number" placeholder="0" value={form.extra_from_vendor} onChange={(e) => setForm({ ...form, extra_from_vendor: e.target.value })} />
+                  </div>
                 </div>
+              </div>
+            )}
+            {!editingId && (
+              <div>
+                <label className="text-xs text-muted-foreground">Vendor &amp; payment (optional — adds a new vendor &amp; records this on the Purchases page)</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Combobox options={vendorSuggestions} placeholder="Vendor name" value={form.vendor_name} onChange={(v) => setForm({ ...form, vendor_name: v })} />
+                  <Select value={form.purchase_mode} onValueChange={(v) => setForm({ ...form, purchase_mode: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash (paid in full)</SelectItem>
+                      <SelectItem value="credit">Credit (pay later)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {form.purchase_mode === "credit" && (
+                  <Input className="mt-2" type="number" placeholder="Amount paid so far (₹) — rest is outstanding" value={form.amount_paid} onChange={(e) => setForm({ ...form, amount_paid: e.target.value })} />
+                )}
               </div>
             )}
             <div>
@@ -459,7 +582,7 @@ export default function Machines() {
         <div className="relative">
           <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
           <Input className="pl-8 w-64" placeholder="Search code / model…" value={search}
-            onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
+            onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as MachineStatus | "all")}>
           <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
@@ -473,7 +596,10 @@ export default function Machines() {
           <SelectTrigger className="w-40"><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent><SelectItem value="all">All types</SelectItem><SelectItem value="brand">Brand</SelectItem><SelectItem value="local">Local</SelectItem></SelectContent>
         </Select>
-        <Button variant="outline" onClick={load}>Search</Button>
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="Sort by" /></SelectTrigger>
+          <SelectContent>{SORT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -484,18 +610,16 @@ export default function Machines() {
               <th className="px-2 py-2">Code</th><th className="px-2 py-2">Model</th><th className="px-2 py-2">Category</th><th className="px-2 py-2">Type</th><th className="px-2 py-2">HSN</th>
               <th className="px-2 py-2">Status</th><th className="px-2 py-2">Parts</th>
               <th className="px-2 py-2">Buy</th><th className="px-2 py-2">Sale</th><th className="px-2 py-2">Tax</th>
-              {extended && <th className="px-2 py-2">Extra→Cust</th>}
-              {extended && <th className="px-2 py-2">Extra←Vend</th>}
               <th className="px-2 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td className="p-4 text-muted-foreground" colSpan={extended ? 13 : 11}>Loading…</td></tr>
+              <tr><td className="p-4 text-muted-foreground" colSpan={11}>Loading…</td></tr>
             ) : machines.length === 0 ? (
-              <tr><td className="p-4 text-muted-foreground" colSpan={extended ? 13 : 11}>No machines yet. Add one to get started.</td></tr>
-            ) : machines.map((m) => (
-              <tr key={m.id} className="border-t">
+              <tr><td className="p-4 text-muted-foreground" colSpan={11}>No machines yet. Add one to get started.</td></tr>
+            ) : sortedMachines.map((m) => (
+              <tr key={m.id} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => openDetail(m)}>
                 <td className="px-2 py-2 font-medium">{m.code}</td>
                 <td className="px-2 py-2">{m.model || "—"}</td>
                 <td className="px-2 py-2">{m.category || "—"}</td>
@@ -503,7 +627,7 @@ export default function Machines() {
                   <span className={`inline-block rounded px-2 py-0.5 text-xs capitalize ${(m.machine_type ?? "brand") === "local" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>{m.machine_type ?? "brand"}</span>
                 </td>
                 <td className="px-2 py-2">{m.hsn || "—"}</td>
-                <td className="px-2 py-2">
+                <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                   <Select value={m.status} onValueChange={(v) => handleStatus(m, v as MachineStatus)}>
                     <SelectTrigger className={`h-7 w-[104px] border-0 px-2 text-xs ${statusClass[m.status]}`}><SelectValue /></SelectTrigger>
                     <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
@@ -517,9 +641,7 @@ export default function Machines() {
                 <td className="px-2 py-2">{money(m.buy_price)}</td>
                 <td className="px-2 py-2">{money(m.sale_price)}</td>
                 <td className="px-2 py-2">{money(m.tax_amount)}</td>
-                {extended && <td className="px-2 py-2">{money(m.extra_amount)}</td>}
-                {extended && <td className="px-2 py-2">{money(m.extra_from_vendor)}</td>}
-                <td className="px-2 py-2">
+                <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                   <div className="grid grid-cols-2 gap-1 w-16">
                     <Button size="icon" variant="outline" className="h-7 w-7" title="Edit" onClick={() => openEdit(m)}><Pencil className="h-3.5 w-3.5" /></Button>
                     <Button size="icon" variant="outline" className="h-7 w-7" title="Parts" onClick={() => openParts(m)}><Wrench className="h-3.5 w-3.5" /></Button>
@@ -548,7 +670,7 @@ export default function Machines() {
             {(detail?.parts ?? []).length === 0 && <p className="text-sm text-muted-foreground">No parts recorded.</p>}
             {(detail?.parts ?? []).map((p: MachinePart) => editPart?.id === p.id ? (
               <div key={p.id} className="flex items-center gap-2 border rounded px-2 py-2 bg-secondary/30">
-                <Input list="ml-parts" className="h-8" value={editPart.part_name} onChange={(e) => setEditPart({ ...editPart, part_name: e.target.value })} />
+                <Combobox className="h-8" options={catalog.part_names} value={editPart.part_name} onChange={(v) => setEditPart({ ...editPart, part_name: v })} />
                 <Input type="number" className="h-8 w-16" value={editPart.qty} onChange={(e) => setEditPart({ ...editPart, qty: Number(e.target.value) })} />
                 <Select value={editPart.status} onValueChange={(v) => setEditPart({ ...editPart, status: v })}>
                   <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
@@ -590,8 +712,7 @@ export default function Machines() {
           )}
 
           <div className="flex items-center gap-2 pt-2">
-            <Input list="ml-parts" placeholder="Part name" value={newPart.part_name} onChange={(e) => setNewPart({ ...newPart, part_name: e.target.value })} />
-            <datalist id="ml-parts">{catalog.part_names.map((p) => <option key={p} value={p} />)}</datalist>
+            <Combobox options={catalog.part_names} placeholder="Part name" value={newPart.part_name} onChange={(v) => setNewPart({ ...newPart, part_name: v })} />
             <Input type="number" className="w-20" value={newPart.qty} onChange={(e) => setNewPart({ ...newPart, qty: Number(e.target.value) })} />
             <Button onClick={handleAddPart}>Add</Button>
           </div>
@@ -600,7 +721,7 @@ export default function Machines() {
 
       {/* Convert chooser — challan or invoice */}
       <Dialog open={!!convertFor} onOpenChange={(o) => !o && setConvertFor(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>Convert {convertFor?.code}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">What would you like to create from this machine?</p>
           <div className="grid grid-cols-2 gap-2 pt-2">
@@ -623,18 +744,12 @@ export default function Machines() {
               <label className="text-xs text-muted-foreground">Issue *</label>
               <Input placeholder="e.g. Display not working" value={issueForm.title} onChange={(e) => setIssueForm({ ...issueForm, title: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-muted-foreground">Place (where it is)</label>
-                <Input placeholder="Workshop / Customer site" value={issueForm.place} onChange={(e) => setIssueForm({ ...issueForm, place: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Process (stage)</label>
-                <Select value={issueForm.process} onValueChange={(v) => setIssueForm({ ...issueForm, process: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{["Reported", "Diagnosing", "Awaiting Parts", "In Repair", "Testing", "Ready"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Process (stage)</label>
+              <Select value={issueForm.process} onValueChange={(v) => setIssueForm({ ...issueForm, process: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{["Reported", "Diagnosing", "Awaiting Parts", "In Repair", "Testing", "Ready"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
             <p className="text-xs text-muted-foreground">Reporting an issue moves the machine to Maintenance and lists it on the Machine Issues page.</p>
           </div>
@@ -665,6 +780,86 @@ export default function Machines() {
               </div>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Row-click detail popup — all details about a machine */}
+      <Dialog open={!!infoFor} onOpenChange={(o) => !o && setInfoFor(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {infoFor && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {infoFor.code}{infoFor.model ? ` · ${infoFor.model}` : ""}
+                  <span className={`text-xs px-2 py-0.5 rounded ${statusClass[infoFor.status]}`}>{STATUS_LABELS[infoFor.status]}</span>
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 text-sm">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
+                  <div><span className="text-muted-foreground">Category</span><div>{infoFor.category || "—"}</div></div>
+                  <div><span className="text-muted-foreground">Type</span><div className="capitalize">{infoFor.machine_type ?? "brand"}{infoFor.brand_name ? ` · ${infoFor.brand_name}` : ""}</div></div>
+                  <div><span className="text-muted-foreground">HSN</span><div>{infoFor.hsn || "—"}</div></div>
+                  <div><span className="text-muted-foreground">Accuracy</span><div>{infoFor.accuracy || "—"}</div></div>
+                  <div><span className="text-muted-foreground">Platform size</span><div>{infoFor.platform_size || "—"}</div></div>
+                  <div><span className="text-muted-foreground">Capacity</span><div>{infoFor.capacity || "—"}</div></div>
+                  <div><span className="text-muted-foreground">Purchase date</span><div>{infoFor.purchase_date || "—"}</div></div>
+                  <div><span className="text-muted-foreground">Invoice date</span><div>{infoFor.invoice_date || "—"}</div></div>
+                  <div><span className="text-muted-foreground">Stamping date</span><div>{infoFor.stamping_date || "—"}</div></div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 border-t pt-3">
+                  <div><span className="text-muted-foreground">Buy price</span><div className="font-medium">{money(infoFor.buy_price)}</div></div>
+                  <div><span className="text-muted-foreground">Sale price</span><div className="font-medium">{money(infoFor.sale_price)}</div></div>
+                  <div><span className="text-muted-foreground">Tax</span><div className="font-medium">{money(infoFor.tax_amount)}</div></div>
+                  {extended && <div><span className="text-muted-foreground">Extra → customer</span><div className="font-medium">{money(infoFor.extra_amount)}</div></div>}
+                  {extended && <div><span className="text-muted-foreground">Extra ← vendor</span><div className="font-medium">{money(infoFor.extra_from_vendor)}</div></div>}
+                </div>
+                {infoFor.notes && (
+                  <div className="border-t pt-3"><span className="text-muted-foreground">Notes</span><div>{infoFor.notes}</div></div>
+                )}
+
+                <div className="border-t pt-3">
+                  <h3 className="font-medium mb-2 flex items-center gap-1"><Wrench className="h-4 w-4" /> Fitted parts {infoFor.parts ? `(${infoFor.parts.length})` : ""}</h3>
+                  {infoLoading && !infoFor.parts ? (
+                    <p className="text-muted-foreground text-xs">Loading…</p>
+                  ) : infoFor.parts && infoFor.parts.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {infoFor.parts.map((p) => (
+                        <span key={p.id} className={`text-xs px-2 py-0.5 rounded ${p.status === "missing" ? "bg-red-100 text-red-700" : p.status === "transferred" ? "bg-amber-100 text-amber-800" : "bg-secondary"}`}>
+                          {p.part_name}{p.qty > 1 ? ` ×${p.qty}` : ""}{p.status !== "present" ? ` · ${p.status}` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  ) : <p className="text-muted-foreground text-xs">No parts recorded.</p>}
+                </div>
+
+                <div className="border-t pt-3">
+                  <h3 className="font-medium mb-2 flex items-center gap-1"><History className="h-4 w-4" /> Movement history</h3>
+                  {infoLoading ? (
+                    <p className="text-muted-foreground text-xs">Loading…</p>
+                  ) : infoMoves.length === 0 ? (
+                    <p className="text-muted-foreground text-xs">No movements recorded yet.</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                      {infoMoves.map((mv) => (
+                        <div key={mv.id} className="flex items-start justify-between border rounded px-3 py-2 text-xs">
+                          <div>
+                            <span className="px-2 py-0.5 rounded bg-secondary capitalize">{mv.movement_type.replace("_", " ")}</span>
+                            <div className="mt-1">{mv.description || "—"}</div>
+                          </div>
+                          <span className="text-muted-foreground whitespace-nowrap">{mv.created_at?.slice(0, 16).replace("T", " ")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setInfoFor(null); openParts(infoFor); }}>Manage parts</Button>
+                <Button variant="outline" onClick={() => { const m = infoFor; setInfoFor(null); openEdit(m); }}>Edit</Button>
+                <DialogClose asChild><Button>Close</Button></DialogClose>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

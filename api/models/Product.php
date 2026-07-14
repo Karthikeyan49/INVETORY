@@ -28,8 +28,8 @@ class Product
         $offset = ($page - 1) * $limit;
 
         $rows = Database::fetchAll(
-            "SELECT product_id, product_name, product_type, description, base_price, gst_rate, unit, category, tag, tag_color, suitable_for, image_url,
-                    gcv, ash_content, moisture_content, is_available, created_at, updated_at
+            "SELECT product_id, product_name, product_type, description, base_price, gst_rate, unit, category, tag, tag_color, image_url,
+                    is_available, created_at, updated_at
              FROM products WHERE $whereClause ORDER BY product_id ASC LIMIT ? OFFSET ?",
             [...$params, $limit, $offset]
         );
@@ -50,8 +50,8 @@ class Product
     public static function findById(int $id): ?array
     {
         $row = Database::fetch(
-            'SELECT product_id, product_name, product_type, description, base_price, gst_rate, unit, category, tag, tag_color, suitable_for, image_url,
-                    gcv, ash_content, moisture_content, is_available, created_at, updated_at
+            'SELECT product_id, product_name, product_type, description, base_price, gst_rate, unit, category, tag, tag_color, image_url,
+                    is_available, created_at, updated_at
              FROM products WHERE product_id = ? LIMIT 1',
             [$id]
         );

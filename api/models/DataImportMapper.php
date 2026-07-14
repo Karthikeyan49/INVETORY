@@ -19,10 +19,9 @@ class DataImportMapper
                 'gst_number' => '33ABCDE1234F1Z5', 'udyam_number' => '',
             ], 'phone'),
             'products' => self::module('Products', 'products', ['product_name', 'product_type', 'base_price'], [
-                'product_name' => '6mm Biomass Pellet', 'product_type' => 'pellet',
-                'description' => 'Product description', 'base_price' => '18.50', 'unit' => 'kg',
-                'category' => 'Pellets', 'gcv' => '4200', 'ash_content' => '5',
-                'moisture_content' => '8', 'is_available' => '1',
+                'product_name' => 'Sample Product', 'product_type' => 'general',
+                'description' => 'Product description', 'base_price' => '18.50', 'unit' => 'Nos',
+                'category' => 'General', 'is_available' => '1',
             ], 'product_name'),
             'opening_stock' => self::module('Opening Stock', 'opening_stock', ['quantity'], [
                 'product_id' => '', 'product_name' => '6mm Biomass Pellet', 'location' => 'Main Store',
@@ -411,9 +410,6 @@ class DataImportMapper
             $v('description') ?: null,
             (float)(self::value($m, 'base_price') ?: $v('base_price')),
             $v('unit') ?: 'kg',
-            $v('gcv') ?: null,
-            $v('ash_content') ?: null,
-            $v('moisture_content') ?: null,
             $v('category') ?: null,
             self::boolValue(self::value($m, 'is_available') !== '' ? self::value($m, 'is_available') : ($v('is_available') ?: '1')) ? 1 : 0,
         ];
@@ -421,7 +417,7 @@ class DataImportMapper
             Database::execute(
                 'UPDATE products
                  SET product_name = ?, product_type = ?, description = ?, base_price = ?, unit = ?,
-                     gcv = ?, ash_content = ?, moisture_content = ?, category = ?, is_available = ?, updated_at = NOW()
+                     category = ?, is_available = ?, updated_at = NOW()
                  WHERE product_id = ?',
                 [...$params, (int)$existing['product_id']]
             );
@@ -429,9 +425,9 @@ class DataImportMapper
         }
         Database::insert(
             'INSERT INTO products
-                (product_name, product_type, description, base_price, unit, gcv, ash_content,
-                 moisture_content, category, is_available, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+                (product_name, product_type, description, base_price, unit,
+                 category, is_available, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NOW())',
             $params
         );
         return 'created';

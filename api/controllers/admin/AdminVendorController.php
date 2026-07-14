@@ -105,6 +105,28 @@ class AdminVendorController
         ]);
     }
 
+    // Top-of-page vendor analytics: total vendors, total purchase cost, outstanding payable.
+    public function analytics(Request $request): void
+    {
+        // Literal SHOW TABLES (matches Vendor::all) — avoids a bound-param SHOW.
+        $hasPurchases = Database::fetch("SHOW TABLES LIKE 'purchases'") !== null;
+
+        $totalCost = 0.0;
+        $outstanding = 0.0;
+        if ($hasPurchases) {
+            $r1 = Database::fetch('SELECT COALESCE(SUM(total), 0) AS t FROM purchases');
+            $totalCost = (float)($r1['t'] ?? 0);
+            $r2 = Database::fetch('SELECT COALESCE(SUM(GREATEST(total - amount_paid, 0)), 0) AS t FROM purchases');
+            $outstanding = (float)($r2['t'] ?? 0);
+        }
+
+        Response::success([
+            'total_vendors' => Database::count('SELECT COUNT(*) AS cnt FROM vendors WHERE is_active = 1'),
+            'total_purchase_cost' => $totalCost,
+            'outstanding_payable' => $outstanding,
+        ]);
+    }
+
     private function payload(Request $request, bool $creating, ?int $vendorId = null): array
     {
         $keys = [

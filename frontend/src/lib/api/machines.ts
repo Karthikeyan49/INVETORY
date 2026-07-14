@@ -32,6 +32,7 @@ export interface Machine {
   model: string | null;
   category: string | null;
   machine_type?: MachineType;
+  brand_name?: string | null;
   accuracy?: string | null;
   platform_size?: string | null;
   capacity?: string | null;
@@ -193,11 +194,11 @@ export interface CatalogModel {
   buy_price: number | null; buy_gst_pct: number | null; sale_price: number | null; sale_gst_pct: number | null;
 }
 export interface MachineCatalog {
-  models: CatalogModel[]; categories: string[]; accuracies: string[]; platform_sizes: string[]; capacities: string[]; hsns: string[]; part_names: string[];
+  models: CatalogModel[]; categories: string[]; accuracies: string[]; platform_sizes: string[]; capacities: string[]; hsns: string[]; brand_names: string[]; part_names: string[];
 }
 export async function fetchCatalog(): Promise<MachineCatalog> {
   const res = await apiFetch<{ success: boolean; data: MachineCatalog }>(`/machines/catalog`);
-  return res.data ?? { models: [], categories: [], accuracies: [], platform_sizes: [], capacities: [], hsns: [], part_names: [] };
+  return res.data ?? { models: [], categories: [], accuracies: [], platform_sizes: [], capacities: [], hsns: [], brand_names: [], part_names: [] };
 }
 
 export interface DeliveryConvertInput {

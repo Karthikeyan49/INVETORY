@@ -35,6 +35,7 @@ import {
   Truck,
   Wrench,
   Brain,
+  Building2,
 } from "lucide-react";
 
 export type MenuItem = { title: string; url: string; icon: typeof LayoutDashboard };
@@ -71,6 +72,7 @@ export const sections: MenuSection[] = [
   {
     label: "Purchase",
     items: [
+      { title: "Vendors", url: "/vendors", icon: Building2 },
       { title: "Purchases", url: "/purchases", icon: Store },
       { title: "Purchase Orders", url: "/purchase-orders", icon: FileStack },
       { title: "Expenses", url: "/expenses", icon: Wallet },

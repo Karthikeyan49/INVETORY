@@ -241,7 +241,7 @@ class Order
         $offset      = ($page - 1) * $limit;
 
         $rows = Database::fetchAll(
-            "SELECT o.order_id, o.order_number, o.total_amount, o.delivery_fee, o.order_status,
+            "SELECT o.order_id, o.order_number, o.user_id, o.total_amount, o.delivery_fee, o.order_status,
                     o.payment_status, o.payment_method, o.tracking_number, o.cancel_reason, o.refund_status,
                     o.source, o.created_at,
                     COALESCE(o.customer_name, u.name) AS customer_name, u.email, u.phone, u.company_name,
@@ -257,6 +257,7 @@ class Order
         );
 
         foreach ($rows as &$r) {
+            $r['user_id']       = $r['user_id'] !== null ? (int)$r['user_id'] : null;
             $r['total_amount'] = (float)$r['total_amount'];
             $r['delivery_fee'] = (float)$r['delivery_fee'];
             $r['total_items']  = (int)$r['total_items'];

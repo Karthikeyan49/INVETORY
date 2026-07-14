@@ -7,7 +7,7 @@
  */
 import { apiFetch } from "./client";
 
-export const PO_STATUSES = ["open", "closed", "cancelled"] as const;
+export const PO_STATUSES = ["open", "confirmed", "closed", "cancelled"] as const;
 export type PoStatus = (typeof PO_STATUSES)[number];
 
 export interface PoItem {

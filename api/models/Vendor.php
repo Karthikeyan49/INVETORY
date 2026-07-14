@@ -23,8 +23,19 @@ class Vendor
 
         $whereClause = implode(' AND ', $where);
         $total = Database::count("SELECT COUNT(*) AS cnt FROM vendors WHERE $whereClause", $params);
+
+        // Per-vendor purchase cost: purchases are keyed by free-text vendor_name
+        // (that's what the machine-add flow and the Purchases page write), so match
+        // it to the vendor master by name (case/space-insensitive).
+        $hasPurchases = Database::fetch("SHOW TABLES LIKE 'purchases'") !== null;
+        $spendSelect = $hasPurchases
+            ? ",\n  COALESCE((SELECT SUM(p.total) FROM purchases p WHERE LOWER(TRIM(p.vendor_name)) = LOWER(TRIM(vendors.name))), 0) AS purchase_total,"
+              . "\n  COALESCE((SELECT COUNT(*) FROM purchases p WHERE LOWER(TRIM(p.vendor_name)) = LOWER(TRIM(vendors.name))), 0) AS purchase_count,"
+              . "\n  COALESCE((SELECT SUM(GREATEST(p.total - p.amount_paid, 0)) FROM purchases p WHERE LOWER(TRIM(p.vendor_name)) = LOWER(TRIM(vendors.name))), 0) AS purchase_outstanding"
+            : ",\n  0 AS purchase_total, 0 AS purchase_count, 0 AS purchase_outstanding";
+
         $rows = Database::fetchAll(
-            "SELECT *
+            "SELECT vendors.*$spendSelect
              FROM vendors
              WHERE $whereClause
              ORDER BY is_active DESC, name ASC
@@ -177,6 +188,9 @@ class Vendor
             'payment_terms' => $row['payment_terms'],
             'notes' => $row['notes'] ?? null,
             'is_active' => (bool)$row['is_active'],
+            'purchase_total' => isset($row['purchase_total']) ? (float)$row['purchase_total'] : 0.0,
+            'purchase_count' => isset($row['purchase_count']) ? (int)$row['purchase_count'] : 0,
+            'purchase_outstanding' => isset($row['purchase_outstanding']) ? (float)$row['purchase_outstanding'] : 0.0,
             'created_at' => $row['created_at'] ?? null,
             'updated_at' => $row['updated_at'] ?? null,
         ];

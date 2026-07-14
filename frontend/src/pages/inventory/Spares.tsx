@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Combobox } from "@/components/ui/combobox";
 import {
   fetchSpares, createSpare, updateSpare, deleteSpare, moveSpare, fetchSpareForecast,
   SPARE_REASONS, type Spare, type SpareInput, type SpareReason, type SpareForecast,
@@ -22,9 +23,30 @@ import { fetchMachines, type Machine } from "@/lib/api/machines";
 const money = (v: number | null | undefined) =>
   v == null ? "—" : `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
+const UNIT_OPTIONS = ["pcs", "Nos", "Set", "Kg", "Box", "Pair", "Roll", "Metre"];
+
 const emptyForm: SpareInput = {
   name: "", part_no: "", category: "", quantity: 0, unit: "pcs", unit_cost: 0, reorder_level: 0, location: "", notes: "",
 };
+
+type SortKey = "name_asc" | "name_desc" | "qty_desc" | "qty_asc" | "low_stock_first";
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "name_asc", label: "Name A–Z" },
+  { value: "name_desc", label: "Name Z–A" },
+  { value: "qty_desc", label: "Quantity high–low" },
+  { value: "qty_asc", label: "Quantity low–high" },
+  { value: "low_stock_first", label: "Low stock first" },
+];
+function sortSpares(rows: Spare[], sortBy: SortKey): Spare[] {
+  const sorted = [...rows];
+  switch (sortBy) {
+    case "name_desc": return sorted.sort((a, b) => b.name.localeCompare(a.name));
+    case "qty_desc": return sorted.sort((a, b) => b.quantity - a.quantity);
+    case "qty_asc": return sorted.sort((a, b) => a.quantity - b.quantity);
+    case "low_stock_first": return sorted.sort((a, b) => Number(b.low_stock) - Number(a.low_stock));
+    default: return sorted.sort((a, b) => a.name.localeCompare(b.name));
+  }
+}
 
 export default function Spares() {
   const [rows, setRows] = useState<Spare[]>([]);
@@ -34,6 +56,7 @@ export default function Spares() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [lowOnly, setLowOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<SortKey>("name_asc");
   const [tab, setTab] = useState<"stock" | "forecast">("stock");
   const [forecast, setForecast] = useState<SpareForecast[]>([]);
 
@@ -47,6 +70,9 @@ export default function Spares() {
     qty: "", reason: "receive", machine_id: "", note: "",
   });
 
+  // Row-click detail popup
+  const [infoFor, setInfoFor] = useState<Spare | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -58,14 +84,21 @@ export default function Spares() {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryFilter, lowOnly]);
+  }, [search, categoryFilter, lowOnly]);
 
-  useEffect(() => { load(); }, [load]);
+  // categoryFilter/lowOnly changes load immediately; search is debounced so we
+  // don't fire a request on every keystroke.
+  useEffect(() => { load(); }, [categoryFilter, lowOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const t = setTimeout(() => load(), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
   useEffect(() => { fetchMachines({ limit: 200 }).then((r) => setMachines(r.rows)).catch(() => {}); }, []);
   useEffect(() => { if (tab === "forecast") fetchSpareForecast(90).then(setForecast).catch(() => {}); }, [tab]);
 
   const lowCount = rows.filter((r) => r.low_stock).length;
+  const sortedRows = sortSpares(rows, sortBy);
 
   function openAdd() { setEditingId(null); setForm(emptyForm); setDialogOpen(true); }
   function openEdit(s: Spare) {
@@ -99,6 +132,11 @@ export default function Spares() {
   }
 
   function openMove(s: Spare) {
+    setMoveFor(s);
+    setMoveForm({ qty: "", reason: "receive", machine_id: "", note: "" });
+  }
+  // Quick "+" — jump straight to receiving stock for this spare.
+  function openReceive(s: Spare) {
     setMoveFor(s);
     setMoveForm({ qty: "", reason: "receive", machine_id: "", note: "" });
   }
@@ -151,14 +189,17 @@ export default function Spares() {
             <div className="relative">
               <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
               <Input className="pl-8 w-56" placeholder="Search name / part no" value={search}
-                     onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
+                     onChange={(e) => setSearch(e.target.value)} />
             </div>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="w-44"><SelectValue placeholder="Category" /></SelectTrigger>
               <SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
             </Select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+              <SelectTrigger className="w-48"><SelectValue placeholder="Sort by" /></SelectTrigger>
+              <SelectContent>{SORT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+            </Select>
             <Button variant={lowOnly ? "default" : "outline"} size="sm" onClick={() => setLowOnly(!lowOnly)}>Low stock only</Button>
-            <Button variant="outline" onClick={load}>Search</Button>
           </div>
 
           <div className="border rounded-lg overflow-x-auto">
@@ -173,10 +214,10 @@ export default function Spares() {
               <tbody>
                 {loading ? (
                   <tr><td colSpan={8} className="p-4 text-muted-foreground">Loading…</td></tr>
-                ) : rows.length === 0 ? (
+                ) : sortedRows.length === 0 ? (
                   <tr><td colSpan={8} className="p-4 text-muted-foreground">No spares yet. Add one to get started.</td></tr>
-                ) : rows.map((s) => (
-                  <tr key={s.id} className="border-t">
+                ) : sortedRows.map((s) => (
+                  <tr key={s.id} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setInfoFor(s)}>
                     <td className="px-2 py-2 font-medium">{s.name}</td>
                     <td className="px-2 py-2">{s.part_no || "—"}</td>
                     <td className="px-2 py-2">{s.category || "—"}</td>
@@ -187,8 +228,9 @@ export default function Spares() {
                     <td className="px-2 py-2">{s.reorder_level}</td>
                     <td className="px-2 py-2">{money(s.unit_cost)}</td>
                     <td className="px-2 py-2">{s.location || "—"}</td>
-                    <td className="px-2 py-2">
-                      <div className="flex gap-2">
+                    <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-2">
+                        <Button size="icon" variant="outline" className="h-7 w-7 text-primary" onClick={() => openReceive(s)} title="Add quantity (receive stock)"><Plus className="h-4 w-4" /></Button>
                         <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openMove(s)}>Move</Button>
                         <button className="text-muted-foreground hover:text-foreground" onClick={() => openEdit(s)} title="Edit"><Pencil className="h-4 w-4" /></button>
                         <button className="text-red-500 hover:text-red-700" onClick={() => handleDelete(s)} title="Delete"><Trash2 className="h-4 w-4" /></button>
@@ -245,8 +287,7 @@ export default function Spares() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground">Category</label>
-                <Input list="spare-cats" value={form.category ?? ""} onChange={(e) => setForm({ ...form, category: e.target.value })} />
-                <datalist id="spare-cats">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+                <Combobox options={categories} placeholder="e.g. Electronics" value={form.category ?? ""} onChange={(v) => setForm({ ...form, category: v })} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Location</label>
@@ -260,7 +301,7 @@ export default function Spares() {
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Unit</label>
-                <Input value={form.unit ?? ""} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
+                <Combobox options={UNIT_OPTIONS} placeholder="pcs" value={form.unit ?? ""} onChange={(v) => setForm({ ...form, unit: v })} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Unit cost</label>
@@ -323,6 +364,38 @@ export default function Spares() {
             <Button variant="outline" onClick={() => setMoveFor(null)}>Cancel</Button>
             <Button onClick={confirmMove}>Apply</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Row-click detail popup — all details about a spare */}
+      <Dialog open={!!infoFor} onOpenChange={(o) => !o && setInfoFor(null)}>
+        <DialogContent className="max-w-xl">
+          {infoFor && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {infoFor.name}
+                  {infoFor.low_stock && <span className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700">Low stock</span>}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <div><span className="text-muted-foreground">Part No</span><div>{infoFor.part_no || "—"}</div></div>
+                <div><span className="text-muted-foreground">Category</span><div>{infoFor.category || "—"}</div></div>
+                <div><span className="text-muted-foreground">In stock</span><div className={`font-medium ${infoFor.low_stock ? "text-red-700" : ""}`}>{infoFor.quantity} {infoFor.unit}</div></div>
+                <div><span className="text-muted-foreground">Reorder level</span><div>{infoFor.reorder_level}</div></div>
+                <div><span className="text-muted-foreground">Unit cost</span><div>{money(infoFor.unit_cost)}</div></div>
+                <div><span className="text-muted-foreground">Stock value</span><div className="font-medium">{money((infoFor.unit_cost || 0) * (infoFor.quantity || 0))}</div></div>
+                <div><span className="text-muted-foreground">Location</span><div>{infoFor.location || "—"}</div></div>
+              </div>
+              {infoFor.notes && <div className="border-t pt-3 text-sm"><span className="text-muted-foreground">Notes</span><div>{infoFor.notes}</div></div>}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { const s = infoFor; setInfoFor(null); openReceive(s); }} className="gap-1"><Plus className="h-4 w-4" /> Add quantity</Button>
+                <Button variant="outline" onClick={() => { const s = infoFor; setInfoFor(null); openMove(s); }}>Move</Button>
+                <Button variant="outline" onClick={() => { const s = infoFor; setInfoFor(null); openEdit(s); }}>Edit</Button>
+                <Button onClick={() => setInfoFor(null)}>Close</Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

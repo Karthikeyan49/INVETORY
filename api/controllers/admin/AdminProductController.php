@@ -21,8 +21,8 @@ class AdminProductController
 
         $data = $request->only([
             'product_name', 'product_type', 'description', 'base_price', 'gst_rate', 'unit',
-            'gcv', 'ash_content', 'moisture_content', 'category',
-            'tag', 'tag_color', 'suitable_for', 'image_url', 'is_available', 'configurations',
+            'category',
+            'tag', 'tag_color', 'image_url', 'is_available', 'configurations',
         ]);
 
         $isAvail = isset($data['is_available'])
@@ -34,9 +34,9 @@ class AdminProductController
             $productId = Database::insert(
                 'INSERT INTO products
                     (product_name, product_type, description, base_price, gst_rate, unit,
-                     gcv, ash_content, moisture_content, category,
-                     tag, tag_color, suitable_for, image_url, is_available, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+                     category,
+                     tag, tag_color, image_url, is_available, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
                 [
                     Request::sanitize($data['product_name']),
                     strtolower(trim($data['product_type'])),
@@ -44,13 +44,9 @@ class AdminProductController
                     (float)$data['base_price'],
                     isset($data['gst_rate']) ? (float)$data['gst_rate'] : 18,
                     $data['unit']             ?? 'kg',
-                    $data['gcv']              ?? null,
-                    $data['ash_content']      ?? null,
-                    $data['moisture_content'] ?? null,
                     $data['category']         ?? null,
                     $data['tag']              ?? null,
                     $data['tag_color']        ?? null,
-                    $data['suitable_for']     ?? null,
                     $data['image_url']        ?? null,
                     $isAvail,
                 ]
@@ -100,14 +96,14 @@ class AdminProductController
 
         $allowed = [
             'product_name', 'product_type', 'description', 'base_price', 'gst_rate', 'unit',
-            'gcv', 'ash_content', 'moisture_content', 'category',
-            'tag', 'tag_color', 'suitable_for', 'image_url', 'is_available',
+            'category',
+            'tag', 'tag_color', 'image_url', 'is_available',
         ];
 
         $input = $request->only([
             'product_name', 'product_type', 'description', 'base_price', 'gst_rate', 'unit',
-            'gcv', 'ash_content', 'moisture_content', 'category',
-            'tag', 'tag_color', 'suitable_for', 'image_url', 'is_available', 'configurations',
+            'category',
+            'tag', 'tag_color', 'image_url', 'is_available', 'configurations',
         ]);
         
         $fields = [];

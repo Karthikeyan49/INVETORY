@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn, noComboboxMatch } from "@/lib/utils";
 import { exportToExcel } from "@/lib/exporters";
 import { inr, num, qty, formatDateTime } from "@/lib/inventoryFormat";
 import { MovementTypeBadge } from "@/components/inventory/MovementTypeBadge";

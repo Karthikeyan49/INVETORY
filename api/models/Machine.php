@@ -71,16 +71,17 @@ class Machine
         $txt = fn($k) => isset($data[$k]) && $data[$k] !== '' ? trim((string)$data[$k]) : null;
         return Database::insert(
             "INSERT INTO machines
-                (code, model, category, machine_type, accuracy, platform_size, capacity, hsn, customer_id, zone_id, status,
+                (code, model, category, machine_type, brand_name, accuracy, platform_size, capacity, hsn, customer_id, zone_id, status,
                  purchase_date, invoice_date, stamping_date, sold_date,
                  notes, buy_price, buy_gst_pct, sale_price, sale_gst_pct, tax_amount,
                  extra_amount, extra_from_vendor, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 trim((string)$data['code']),
                 isset($data['model']) ? trim((string)$data['model']) : null,
                 $txt('category'),
                 in_array($data['machine_type'] ?? '', self::TYPES, true) ? $data['machine_type'] : 'brand',
+                $txt('brand_name'),
                 $txt('accuracy'),
                 $txt('platform_size'),
                 $txt('capacity'),
@@ -108,7 +109,7 @@ class Machine
     public static function update(int $id, array $data): bool
     {
         $map = [
-            'code' => 'code', 'model' => 'model', 'category' => 'category', 'machine_type' => 'machine_type', 'hsn' => 'hsn',
+            'code' => 'code', 'model' => 'model', 'category' => 'category', 'machine_type' => 'machine_type', 'brand_name' => 'brand_name', 'hsn' => 'hsn',
             'accuracy' => 'accuracy', 'platform_size' => 'platform_size', 'capacity' => 'capacity',
             'customer_id' => 'customer_id', 'zone_id' => 'zone_id',
             'purchase_date' => 'purchase_date', 'invoice_date' => 'invoice_date', 'stamping_date' => 'stamping_date',
@@ -209,6 +210,7 @@ class Machine
             'platform_sizes' => $distinct('platform_size'),
             'capacities'     => $distinct('capacity'),
             'hsns'           => $distinct('hsn'),
+            'brand_names'    => $distinct('brand_name'),
             'part_names'     => array_map(fn($r) => $r['part_name'], $partNames),
         ];
     }

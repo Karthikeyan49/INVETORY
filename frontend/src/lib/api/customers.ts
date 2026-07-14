@@ -56,6 +56,26 @@ export async function updateCustomerStatus(id: number, isActive: boolean): Promi
   });
 }
 
+export interface FindOrCreateCustomerInput {
+  name: string;
+  phone: string;
+  gst_number?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+}
+
+// Looks up a customer by phone, or silently creates one (no password prompt, no emails) —
+// used when an Invoice / Delivery Challan is saved so the customer shows up next time.
+export async function findOrCreateCustomer(data: FindOrCreateCustomerInput): Promise<ApiUser> {
+  const res = await apiFetch<{ success: boolean; data: ApiUser }>(`/admin/users/find-or-create`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  return res.data;
+}
+
 function fmt(amount: number): string {
   return `₹${amount.toLocaleString("en-IN")}`;
 }

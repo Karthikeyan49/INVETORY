@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 import { StatCard } from "@/components/StatCard";
-import { cn } from "@/lib/utils";
+import { cn, noComboboxMatch } from "@/lib/utils";
 import { employeesApi } from "@/lib/api/hr";
 import { meetingsApi } from "@/lib/api/meetings";
 import { phase2Api, type ApiRow } from "@/lib/api/phase2";
@@ -526,6 +526,7 @@ export default function HrCompliance() {
                           placeholder="Type or select event name..."
                           value={standaloneName}
                           onValueChange={setStandaloneName}
+                          onKeyDown={e => { if (e.key === "Enter" && noComboboxMatch(standaloneName, eventSuggestions)) { e.preventDefault(); setStandalonePopOpen(false); } }}
                         />
                         <CommandList>
                           <CommandEmpty>Type an event name to get started</CommandEmpty>

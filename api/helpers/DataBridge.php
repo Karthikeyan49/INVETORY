@@ -170,7 +170,7 @@ class DataBridge
     {
         $rows = Database::fetchAll(
             "SELECT p.product_name, p.product_type, p.description, p.base_price, p.unit,
-                    p.category, p.suitable_for,
+                    p.category,
                     GROUP_CONCAT(CONCAT(pc.size, ' - ₹', pc.price) ORDER BY pc.price SEPARATOR ', ') AS configs
              FROM products p
              LEFT JOIN product_configurations pc ON pc.product_id = p.product_id AND pc.is_available = 1
@@ -184,7 +184,6 @@ class DataBridge
         foreach ($rows as $r) {
             $lines[] = "- **{$r['product_name']}** ({$r['product_type']}) | Base: ₹{$r['base_price']}/{$r['unit']}"
                 . ($r['configs'] ? " | Sizes: {$r['configs']}" : '')
-                . ($r['suitable_for'] ? " | For: {$r['suitable_for']}" : '')
                 . ($r['description'] ? "\n  {$r['description']}" : '');
         }
         return implode("\n", $lines);

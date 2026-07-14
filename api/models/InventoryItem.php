@@ -8,47 +8,74 @@ declare(strict_types=1);
  */
 class InventoryItem
 {
+    /**
+     * Left-joined against a per-model average machine buy price, so "Stock
+     * value" reflects what the machine actually costs even when this row's
+     * own unit_cost was never (or is no longer) kept in sync.
+     */
+    private const MACHINE_PRICE_JOIN = "
+        LEFT JOIN (
+            SELECT model, category, AVG(buy_price) AS avg_buy_price
+            FROM machines
+            WHERE buy_price IS NOT NULL AND buy_price > 0
+            GROUP BY model, category
+        ) mp ON LOWER(mp.model) COLLATE utf8mb4_unicode_ci = LOWER(i.name) COLLATE utf8mb4_unicode_ci
+            AND LOWER(COALESCE(mp.category, '')) COLLATE utf8mb4_unicode_ci = LOWER(COALESCE(i.category, '')) COLLATE utf8mb4_unicode_ci
+    ";
+
     /** @return array{rows: array, total: int} */
     public static function all(array $filters = [], int $page = 1, int $limit = 100): array
     {
         $where  = [];
         $params = [];
         if (!empty($filters['category'])) {
-            $where[] = 'category = ?';
+            $where[] = 'i.category = ?';
             $params[] = (string)$filters['category'];
         }
         if (!empty($filters['search'])) {
-            $where[] = '(name LIKE ? OR sku LIKE ? OR location LIKE ?)';
+            $where[] = '(i.name LIKE ? OR i.sku LIKE ? OR i.location LIKE ?)';
             $like = '%' . $filters['search'] . '%';
             array_push($params, $like, $like, $like);
         }
         if (!empty($filters['low_stock'])) {
-            $where[] = 'quantity <= 5';
+            $where[] = 'i.quantity <= 5';
         }
 
         $clause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
-        $total  = Database::count("SELECT COUNT(*) AS cnt FROM inventory_items $clause", $params);
+        $total  = Database::count("SELECT COUNT(*) AS cnt FROM inventory_items i $clause", $params);
 
         $offset = ($page - 1) * $limit;
         $rows = Database::fetchAll(
-            "SELECT * FROM inventory_items $clause ORDER BY name ASC LIMIT $limit OFFSET $offset",
+            "SELECT i.*, mp.avg_buy_price
+             FROM inventory_items i" . self::MACHINE_PRICE_JOIN . "
+             $clause ORDER BY i.name ASC LIMIT $limit OFFSET $offset",
             $params
         );
         foreach ($rows as &$r) {
-            $r['quantity'] = (int)$r['quantity'];
-            $r['unit_cost'] = (float)($r['unit_cost'] ?? 0);
+            $r = self::withStockValue($r);
         }
         return ['rows' => $rows, 'total' => $total];
     }
 
     public static function find(int $id): ?array
     {
-        $row = Database::fetch("SELECT * FROM inventory_items WHERE id = ? LIMIT 1", [$id]);
-        if ($row) {
-            $row['quantity'] = (int)$row['quantity'];
-            $row['unit_cost'] = (float)($row['unit_cost'] ?? 0);
-        }
-        return $row ?: null;
+        $row = Database::fetch(
+            "SELECT i.*, mp.avg_buy_price FROM inventory_items i" . self::MACHINE_PRICE_JOIN . " WHERE i.id = ? LIMIT 1",
+            [$id]
+        );
+        return $row ? self::withStockValue($row) : null;
+    }
+
+    /** Normalize numeric fields and compute stock_value (machine price wins over the stored unit_cost). */
+    private static function withStockValue(array $r): array
+    {
+        $r['quantity'] = (int)$r['quantity'];
+        $r['unit_cost'] = (float)($r['unit_cost'] ?? 0);
+        $machinePrice = isset($r['avg_buy_price']) && $r['avg_buy_price'] !== null ? (float)$r['avg_buy_price'] : null;
+        $r['effective_unit_cost'] = $machinePrice ?? $r['unit_cost'];
+        $r['stock_value'] = $r['quantity'] * $r['effective_unit_cost'];
+        unset($r['avg_buy_price']);
+        return $r;
     }
 
     /** Distinct categories for the type-once-then-dropdown combo. */
@@ -109,18 +136,23 @@ class InventoryItem
     /**
      * When a machine is added, keep a matching stock item in sync: if an item
      * with the same name (model) + category already exists, bump its quantity
-     * by one; otherwise create it starting at one. No-op when model is blank.
+     * by one (backfilling sku/unit_cost if they were never set); otherwise
+     * create it starting at one, carrying over the machine's code (→ SKU) and
+     * buy price (→ unit cost) so "Stock value" is populated. No-op when model
+     * is blank.
      */
-    public static function incrementForMachine(?string $model, ?string $category): void
+    public static function incrementForMachine(?string $model, ?string $category, ?string $sku = null, $unitCost = null): void
     {
         $name = trim((string)$model);
         if ($name === '') {
             return;
         }
         $cat = trim((string)$category);
+        $skuVal = trim((string)$sku);
+        $costVal = $unitCost !== null && $unitCost !== '' ? max(0.0, (float)$unitCost) : null;
         try {
             $existing = Database::fetch(
-                "SELECT id FROM inventory_items
+                "SELECT id, sku, unit_cost FROM inventory_items
                  WHERE LOWER(name) = LOWER(?)
                    AND ((category IS NULL AND ? = '') OR LOWER(COALESCE(category,'')) = LOWER(?))
                  LIMIT 1",
@@ -128,8 +160,19 @@ class InventoryItem
             );
             if ($existing) {
                 Database::execute("UPDATE inventory_items SET quantity = quantity + 1 WHERE id = ?", [(int)$existing['id']]);
+                // Backfill sku/unit_cost only if this row never had them set —
+                // never overwrite a value someone entered manually.
+                if (empty($existing['sku']) && $skuVal !== '') {
+                    Database::execute("UPDATE inventory_items SET sku = ? WHERE id = ?", [$skuVal, (int)$existing['id']]);
+                }
+                if (empty((float)$existing['unit_cost']) && $costVal !== null) {
+                    Database::execute("UPDATE inventory_items SET unit_cost = ? WHERE id = ?", [$costVal, (int)$existing['id']]);
+                }
             } else {
-                self::create(['name' => $name, 'category' => $cat !== '' ? $cat : null, 'quantity' => 1, 'unit' => 'Nos']);
+                self::create([
+                    'name' => $name, 'category' => $cat !== '' ? $cat : null, 'quantity' => 1, 'unit' => 'Nos',
+                    'sku' => $skuVal !== '' ? $skuVal : null, 'unit_cost' => $costVal ?? 0,
+                ]);
             }
         } catch (\Throwable $e) {
             error_log('[InventoryItem::incrementForMachine] ' . $e->getMessage());

@@ -96,6 +96,48 @@ class AdminUserController
         ]);
     }
 
+    // ─── POST /admin/users/find-or-create ──────────────────────────────────────
+    // Lightweight customer upsert used when converting a machine to an invoice
+    // or delivery challan — looks up an existing customer by phone, or creates
+    // one silently (no password prompt, no credential/welcome emails).
+
+    public function findOrCreate(Request $request): void
+    {
+        Validator::make($request->only(['name', 'phone']), [
+            'name' => 'required|string|min:2|max:100',
+            'phone' => 'required|phone',
+        ])->validate();
+
+        $phone = preg_replace('/\D/', '', (string) $request->input('phone'));
+
+        $existing = User::findByPhone($phone);
+        if ($existing) {
+            Response::success(User::sanitizeForResponse($existing), 'Existing customer matched');
+            return;
+        }
+
+        try {
+            $userId = User::create([
+                'name' => (string) $request->input('name'),
+                'email' => $phone . '@noemail.inventory.local',
+                'phone' => $phone,
+                'user_type' => 'customer',
+                'company_name' => $request->input('company_name'),
+                'address' => $request->input('address'),
+                'city' => $request->input('city'),
+                'state' => $request->input('state'),
+                'pincode' => $request->input('pincode'),
+                'gst_number' => $request->input('gst_number'),
+                'password' => bin2hex(random_bytes(12)),
+            ]);
+        } catch (AppException $e) {
+            Response::error($e->getMessage(), $e->getCode());
+            return;
+        }
+
+        Response::success(User::sanitizeForResponse(User::findById($userId)), 'Customer created', 201);
+    }
+
     // ─── POST /admin/users ───────────────────────────────────────────────────
 
     public function store(Request $request): void
@@ -488,6 +530,29 @@ HTML;
             'cancelled_orders' => $byStatus['cancelled'] ?? 0,
             'returned_orders'  => $byStatus['returned']  ?? 0,
             'total_spent'      => round($totalSpent, 2),
+        ]);
+    }
+
+    // ─── GET /admin/users/{id}/orders ────────────────────────────────────────
+    // Order history for one customer — reuses Order::forUser (built for the
+    // mobile-app "my orders" screen) from the admin side, without the
+    // caller-must-be-self restriction that route carries.
+
+    public function customerOrders(Request $request): void
+    {
+        $userId = (int) $request->param('id');
+        if ($userId <= 0) {
+            Response::error('Invalid user ID', 400);
+        }
+        $page  = max(1, (int) $request->query('page', 1));
+        $limit = min(50, max(1, (int) $request->query('limit', 10)));
+
+        $result = Order::forUser($userId, [], $page, $limit);
+        Response::paginated($result['rows'], [
+            'page'        => $page,
+            'limit'       => $limit,
+            'total'       => $result['total'],
+            'total_pages' => (int) ceil(max(1, $result['total']) / $limit),
         ]);
     }
 

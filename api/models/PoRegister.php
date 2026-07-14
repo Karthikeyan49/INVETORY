@@ -12,7 +12,7 @@ declare(strict_types=1);
  */
 class PoRegister
 {
-    public const STATUSES  = ['open', 'closed', 'cancelled'];
+    public const STATUSES  = ['open', 'confirmed', 'closed', 'cancelled'];
     public const CATEGORIES = ['Bank Transfer', 'Cash', 'UPI'];
 
     public static function nextNo(): string

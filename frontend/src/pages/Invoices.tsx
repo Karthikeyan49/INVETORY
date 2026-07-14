@@ -18,7 +18,7 @@ import { fetchGstinDetails, gstinCompanyName } from "@/lib/api/gstinLookup";
 import { phase2Api, type ApiRow } from "@/lib/api/phase2";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
+import { cn, noComboboxMatch } from "@/lib/utils";
 import {
   downloadInvoiceTemplatePdf,
   placeOfSupplyLabel,
@@ -29,6 +29,7 @@ import { ScrollableX } from "@/components/ui/scrollable-x";
 import { stateFromGstin } from "@/lib/gstState";
 import { downloadCashBill } from "@/lib/srivariScalesPdf";
 import { settingsApi } from "@/lib/api/settings";
+import { fetchCustomers, findOrCreateCustomer } from "@/lib/api/customers";
 
 interface InvoiceItem {
   product: string;
@@ -332,6 +333,7 @@ interface CompanySuggestion {
   gstin: string;
   state: string;
   address: string;
+  phone: string;
 }
 
 interface ProductSuggestion {
@@ -354,6 +356,7 @@ interface NewInvoiceLine {
 
 interface NewInvoiceForm {
   customer_name: string;
+  customer_phone: string;
   customer_gstin: string;
   customer_state: string;
   address_line: string;
@@ -421,7 +424,7 @@ const resolveInvoiceTerms = (): string => {
 };
 
 const emptyNewForm = (): NewInvoiceForm => ({
-  customer_name: "", customer_gstin: "", customer_state: "Tamil Nadu",
+  customer_name: "", customer_phone: "", customer_gstin: "", customer_state: "Tamil Nadu",
   address_line: "", city: "", pincode: "", country: "India",
   seller_state: "Tamil Nadu",
   due_date: "", delivery_fee: "", discount: "", payment_method: "", payment_status: "unpaid",
@@ -626,6 +629,19 @@ export default function Invoices() {
           return merged;
         });
       }
+      // Best-effort: add/link this customer so they show up in the dropdown next time.
+      // Requires a phone number (only place customer accounts are keyed on) — skipped silently otherwise.
+      if (newForm.customer_phone.trim()) {
+        findOrCreateCustomer({
+          name: newForm.customer_name.trim(),
+          phone: newForm.customer_phone.trim(),
+          gst_number: newForm.customer_gstin.trim() || undefined,
+          address: newForm.address_line.trim() || undefined,
+          city: newForm.city.trim() || undefined,
+          state: newForm.customer_state.trim() || undefined,
+          pincode: newForm.pincode.trim() || undefined,
+        }).catch(() => {});
+      }
       toast.success("Invoice created successfully");
       setNewOpen(false);
       setNewForm(emptyNewForm());
@@ -774,35 +790,53 @@ export default function Invoices() {
       .catch(() => {});
   }, [newOpen, editOpen]);
 
-  // Reload customers from existing invoices every time new-invoice dialog opens
+  // Reload customers every time the new-invoice dialog opens — merges the real
+  // Customers directory (so anyone added via a challan/invoice shows up) with
+  // names seen on past invoices (for GSTIN/address suggestions).
   useEffect(() => {
     if (!newOpen) return;
-    // Customers: deduplicated from past invoices (freshest data each open)
-    apiFetch<{ data: Array<{ customer_name: string | null; customer_gstin: string | null; customer_state: string | null; customer_address: string | null }> }>("/admin/invoices?limit=500")
-      .then(res => {
-        const seen = new Set<string>();
-        const list: CompanySuggestion[] = [];
-        for (const inv of res.data ?? []) {
-          const label = inv.customer_name?.trim();
-          if (!label || seen.has(label.toLowerCase())) continue;
-          seen.add(label.toLowerCase());
-          list.push({
-            label,
-            gstin:   inv.customer_gstin   ?? "",
-            state:   inv.customer_state   ?? "Tamil Nadu",
-            address: inv.customer_address ?? "",
-          });
+    Promise.all([
+      fetchCustomers(100, "customer").catch(() => []),
+      apiFetch<{ data: Array<{ customer_name: string | null; customer_gstin: string | null; customer_state: string | null; customer_address: string | null }> }>("/admin/invoices?limit=500").catch(() => ({ data: [] })),
+    ]).then(([customers, invoicesRes]) => {
+      const seen = new Set<string>();
+      const list: CompanySuggestion[] = [];
+      for (const c of customers) {
+        const label = c.name?.trim();
+        if (!label || seen.has(label.toLowerCase())) continue;
+        seen.add(label.toLowerCase());
+        list.push({ label, gstin: "", state: "Tamil Nadu", address: "", phone: c.phone ?? "" });
+      }
+      for (const inv of invoicesRes.data ?? []) {
+        const label = inv.customer_name?.trim();
+        if (!label) continue;
+        const key = label.toLowerCase();
+        const existing = list.find(c => c.label.toLowerCase() === key);
+        if (existing) {
+          existing.gstin ||= inv.customer_gstin ?? "";
+          existing.state = inv.customer_state ?? existing.state;
+          existing.address ||= inv.customer_address ?? "";
+          continue;
         }
-        setCompanies(list.sort((a, b) => a.label.localeCompare(b.label)));
-      })
-      .catch(() => {});
-    // Products
+        if (seen.has(key)) continue;
+        seen.add(key);
+        list.push({
+          label,
+          gstin:   inv.customer_gstin   ?? "",
+          state:   inv.customer_state   ?? "Tamil Nadu",
+          address: inv.customer_address ?? "",
+          phone:   "",
+        });
+      }
+      setCompanies(list.sort((a, b) => a.label.localeCompare(b.label)));
+    });
   }, [newOpen]);
 
   const applyCompany = (c: CompanySuggestion) => {
     setNewForm(f => ({
       ...f,
       customer_name:    c.label,
+      customer_phone:   c.phone   || f.customer_phone,
       customer_gstin:   c.gstin   || f.customer_gstin,
       customer_state:   c.state   || f.customer_state,
       address_line: c.address || f.address_line,
@@ -1026,6 +1060,7 @@ const viewInvoice = async (inv: Invoice) => {
                           placeholder="Search company or type new…"
                           value={newForm.customer_name}
                           onValueChange={v => setNewForm(f => ({ ...f, customer_name: v }))}
+                          onKeyDown={e => { if (e.key === "Enter" && noComboboxMatch(newForm.customer_name, companies.map(c => c.label))) { e.preventDefault(); setCompanyPopOpen(false); } }}
                         />
                         <CommandList>
                           <CommandEmpty>
@@ -1053,6 +1088,14 @@ const viewInvoice = async (inv: Invoice) => {
                       </Command>
                     </PopoverContent>
                   </Popover>
+                </div>
+                <div>
+                  <Label>Customer Phone</Label>
+                  <Input
+                    value={newForm.customer_phone}
+                    onChange={e => setNewForm(f => ({ ...f, customer_phone: e.target.value }))}
+                    placeholder="10-digit mobile — adds them to Customers"
+                  />
                 </div>
                 <div>
                   <Label>GSTIN</Label>
@@ -1248,6 +1291,7 @@ const viewInvoice = async (inv: Invoice) => {
                                     placeholder="Search or type description…"
                                     value={line.description}
                                     onValueChange={v => setLine(idx, { description: v })}
+                                    onKeyDown={e => { if (e.key === "Enter" && noComboboxMatch(line.description, [...products.map(p => p.name), ...customDescs])) { e.preventDefault(); setLinePopOpen(null); } }}
                                   />
                                   <CommandList>
                                     <CommandEmpty>
@@ -1399,7 +1443,12 @@ const viewInvoice = async (inv: Invoice) => {
                       </PopoverTrigger>
                       <PopoverContent className="w-80 p-0" align="start">
                         <Command>
-                          <CommandInput placeholder="Search company…" value={editForm.customer_name} onValueChange={v => setEditForm(f => ({ ...f, customer_name: v }))} />
+                          <CommandInput
+                            placeholder="Search company…"
+                            value={editForm.customer_name}
+                            onValueChange={v => setEditForm(f => ({ ...f, customer_name: v }))}
+                            onKeyDown={e => { if (e.key === "Enter" && noComboboxMatch(editForm.customer_name, companies.map(c => c.label))) { e.preventDefault(); setEditCompanyPopOpen(false); } }}
+                          />
                           <CommandList>
                             <CommandEmpty><span className="text-xs text-muted-foreground">No match — typed name will be used.</span></CommandEmpty>
                             <CommandGroup>
@@ -1606,7 +1655,12 @@ const viewInvoice = async (inv: Invoice) => {
                                 </PopoverTrigger>
                                 <PopoverContent className="w-72 p-0" align="start">
                                   <Command>
-                                    <CommandInput placeholder="Search or type description…" value={line.description} onValueChange={v => setEditLine(idx, { description: v })} />
+                                    <CommandInput
+                                      placeholder="Search or type description…"
+                                      value={line.description}
+                                      onValueChange={v => setEditLine(idx, { description: v })}
+                                      onKeyDown={e => { if (e.key === "Enter" && noComboboxMatch(line.description, [...products.map(p => p.name), ...customDescs])) { e.preventDefault(); setEditLinePopOpen(null); } }}
+                                    />
                                     <CommandList>
                                       <CommandEmpty><span className="text-xs text-muted-foreground">Will use typed text</span></CommandEmpty>
                                       {products.length > 0 && (

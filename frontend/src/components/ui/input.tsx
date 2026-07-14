@@ -3,7 +3,20 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
-  ({ className, type, ...props }, ref) => {
+  ({ className, type, onChange, ...props }, ref) => {
+    // For number fields, strip a stray leading zero as you type ("05" -> "5")
+    // so a preceding zero never sticks in front of an entered value. "0", "0.5"
+    // and "" are preserved. Applies site-wide since every field uses this Input.
+    const handleChange =
+      type === "number" && onChange
+        ? (e: React.ChangeEvent<HTMLInputElement>) => {
+            const v = e.target.value;
+            if (/^0\d/.test(v)) {
+              e.target.value = v.replace(/^0+(?=\d)/, "");
+            }
+            onChange(e);
+          }
+        : onChange;
     return (
       <input
         type={type}
@@ -12,6 +25,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           className,
         )}
         ref={ref}
+        onChange={handleChange}
         {...props}
       />
     );

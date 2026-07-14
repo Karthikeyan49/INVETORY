@@ -21,6 +21,8 @@ import { apiFetch } from "@/lib/api/client";
 import { settingsApi } from "@/lib/api/settings";
 import { stateFromGstin } from "@/lib/gstState";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Combobox } from "@/components/ui/combobox";
+import { fetchCustomers, findOrCreateCustomer, type ApiUser } from "@/lib/api/customers";
 
 const STATUSES: DeliveryStatus[] = ["draft", "issued", "delivered", "cancelled"];
 
@@ -32,7 +34,7 @@ const statusClass: Record<DeliveryStatus, string> = {
 };
 
 const emptyForm = {
-  customer_name: "", machine_id: "", category: "", items: "", delivery_date: "", notes: "",
+  customer_name: "", customer_phone: "", machine_id: "", category: "", items: "", delivery_date: "", notes: "",
   amount: "", gst_pct: "18", extra_amount: "", extra_from_vendor: "",
 };
 
@@ -54,6 +56,7 @@ export default function Deliveries() {
   const [convertFor, setConvertFor] = useState<DeliveryNote | null>(null);
   const [includeExtra, setIncludeExtra] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [customers, setCustomers] = useState<ApiUser[]>([]);
 
   async function load() {
     setLoading(true);
@@ -68,7 +71,14 @@ export default function Deliveries() {
   }
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [statusFilter]);
+  // Real-time search — debounced so we don't fire a request on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => load(), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
   useEffect(() => { fetchMachines({ limit: 200 }).then((r) => setMachines(r.rows)).catch(() => {}); }, []);
+  useEffect(() => { if (addOpen) fetchCustomers(100, "customer").then(setCustomers).catch(() => {}); }, [addOpen]);
 
   // Prefill + open the create dialog when arriving from a machine's "Challan" button.
   const location = useLocation();
@@ -125,6 +135,10 @@ export default function Deliveries() {
       });
       if (res.warning) toast.warning(res.warning);
       else toast.success(`Challan ${res.challan_no} created`);
+      // Best-effort: add/link this customer so they show up in the dropdown next time.
+      if (form.customer_phone.trim()) {
+        findOrCreateCustomer({ name: form.customer_name.trim(), phone: form.customer_phone.trim() }).catch(() => {});
+      }
       setAddOpen(false);
       setForm(emptyForm);
       load();
@@ -210,9 +224,27 @@ export default function Deliveries() {
           <DialogContent>
             <DialogHeader><DialogTitle>New Delivery Challan</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Customer name *</label>
-                <Input value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Customer name *</label>
+                  <Combobox
+                    options={customers.map((c) => c.name)}
+                    value={form.customer_name}
+                    onChange={(v) => {
+                      const match = customers.find((c) => c.name === v);
+                      setForm({ ...form, customer_name: v, customer_phone: match ? match.phone : form.customer_phone });
+                    }}
+                    placeholder="Search or type a new name…"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Customer phone</label>
+                  <Input
+                    value={form.customer_phone}
+                    onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
+                    placeholder="10-digit mobile — adds them to Customers"
+                  />
+                </div>
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Machine (links to inventory)</label>
@@ -287,7 +319,7 @@ export default function Deliveries() {
         <div className="relative">
           <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
           <Input className="pl-8 w-64" placeholder="Search challan / customer…" value={search}
-            onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
+            onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as DeliveryStatus | "all")}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
@@ -296,7 +328,6 @@ export default function Deliveries() {
             {STATUSES.map((s) => <SelectItem key={s} value={s}>{DELIVERY_LABELS[s]}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={load}>Search</Button>
       </div>
 
       <div className="border rounded-lg overflow-x-auto">

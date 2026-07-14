@@ -11,7 +11,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, FileSpreadsheet, FileDown, Wallet } from "lucide-react";
+import { Plus, Trash2, Pencil, FileSpreadsheet, FileDown, Wallet, CheckCircle2, PackageCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,8 @@ import {
   type PurchaseOrder, type PoInput, type PoItem, type PoStatus, type OutstandingSummary,
 } from "@/lib/api/poRegister";
 import { PAYMENT_CATEGORIES } from "@/lib/api/installments";
+import { createMachine } from "@/lib/api/machines";
+import { createSpare, moveSpare, fetchSpares, type Spare } from "@/lib/api/spares";
 
 const money = (v: number | string | null | undefined) =>
   v == null || v === "" ? "—" : `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -35,13 +37,31 @@ const emptyItem = (): PoItem => ({ description: "", qty: 1, unit_price: 0 });
 const emptyForm = {
   vendor_name: "", category: "", location: "", gst_pct: "", extra_amount: "", other_charges: "",
   payment_category: "Bank Transfer", utr_no: "", advance: "", status: "open" as PoStatus, notes: "",
+  payment_mode: "credit",
 };
 type FormState = typeof emptyForm;
 
 const statusClass: Record<PoStatus, string> = {
   open: "bg-amber-100 text-amber-700",
+  confirmed: "bg-sky-100 text-sky-700",
   closed: "bg-green-100 text-green-700",
   cancelled: "bg-gray-200 text-gray-600",
+};
+
+// One machine unit to be received from a PO line (serial + dates).
+type UnitRow = { serial: string; purchase_date: string; stamping_date: string };
+// A PO line item's receive plan: receive as N machines (with serials/dates) or
+// as a spare (quantity into stock).
+type LinePlan = {
+  description: string;
+  qty: number;
+  unit_price: number;
+  kind: "machine" | "spare";
+  samePurchase: boolean;   // one purchase date across all units (overridable)
+  sharedPurchase: string;
+  stampingSame: boolean;   // stamping date = purchase date
+  units: UnitRow[];
+  spareId: string;         // "" = create a new spare from the description
 };
 
 export default function PurchaseOrders() {
@@ -63,6 +83,12 @@ export default function PurchaseOrders() {
 
   const [detail, setDetail] = useState<PurchaseOrder | null>(null);
   const [outstanding, setOutstanding] = useState<OutstandingSummary | null>(null);
+
+  // Convert-to-confirmed goods-receipt popup
+  const [confirmFor, setConfirmFor] = useState<PurchaseOrder | null>(null);
+  const [confirmPlan, setConfirmPlan] = useState<LinePlan[]>([]);
+  const [confirming, setConfirming] = useState(false);
+  const [spares, setSpares] = useState<Spare[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,7 +121,7 @@ export default function PurchaseOrders() {
       gst_pct: po.gst_pct ? String(po.gst_pct) : "", extra_amount: po.extra_amount ? String(po.extra_amount) : "",
       other_charges: po.other_charges ? String(po.other_charges) : "",
       payment_category: po.payment_category ?? "Bank Transfer", utr_no: po.utr_no ?? "",
-      advance: "", status: po.status, notes: po.notes ?? "",
+      advance: "", status: po.status, notes: po.notes ?? "", payment_mode: "credit",
     });
     setItems(po.items && po.items.length ? po.items.map((i) => ({ ...i })) : [emptyItem()]);
     setDialogOpen(true);
@@ -122,7 +148,12 @@ export default function PurchaseOrders() {
       items: cleanItems(),
     };
     if (extended) payload.extra_amount = Number(form.extra_amount) || 0;
-    if (!editingId && Number(form.advance) > 0) payload.advance = Number(form.advance);
+    if (!editingId) {
+      // Cash = paid in full (advance covers the whole total → nothing outstanding);
+      // credit = whatever advance was entered.
+      if (form.payment_mode === "cash") payload.advance = grand;
+      else if (Number(form.advance) > 0) payload.advance = Number(form.advance);
+    }
     try {
       if (editingId) { await updatePurchaseOrder(editingId, payload); toast.success("Purchase order updated"); }
       else { await createPurchaseOrder(payload); toast.success("Purchase order created"); }
@@ -143,6 +174,92 @@ export default function PurchaseOrders() {
       load(); loadOutstanding();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not delete");
+    }
+  }
+
+  // ---- Convert PO → confirmed (receive into inventory) ----
+  function guessKind(category: string | null, description: string): "machine" | "spare" {
+    const hay = `${category ?? ""} ${description}`.toLowerCase();
+    if (/(spare|part|belt|bearing|filter|oil|coolant|roll|cable|sensor)/.test(hay)) return "spare";
+    return "machine";
+  }
+  function openConfirm(po: PurchaseOrder) {
+    setConfirmFor(po);
+    fetchSpares({}).then(({ rows }) => setSpares(rows)).catch(() => setSpares([]));
+    const plan: LinePlan[] = (po.items ?? []).map((it) => {
+      const qty = Math.max(1, Math.round(Number(it.qty) || 1));
+      return {
+        description: it.description,
+        qty,
+        unit_price: Number(it.unit_price) || 0,
+        kind: guessKind(po.category, it.description),
+        samePurchase: true,
+        sharedPurchase: "",
+        stampingSame: true,
+        units: Array.from({ length: qty }, () => ({ serial: "", purchase_date: "", stamping_date: "" })),
+        spareId: "",
+      };
+    });
+    setConfirmPlan(plan);
+  }
+  function setLine(idx: number, patch: Partial<LinePlan>) {
+    setConfirmPlan((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+  }
+  function setUnit(lineIdx: number, unitIdx: number, patch: Partial<UnitRow>) {
+    setConfirmPlan((prev) => prev.map((l, i) =>
+      i === lineIdx ? { ...l, units: l.units.map((u, j) => (j === unitIdx ? { ...u, ...patch } : u)) } : l,
+    ));
+  }
+  async function doConfirm() {
+    if (!confirmFor) return;
+    // Validate: every machine unit needs a serial code.
+    for (const line of confirmPlan) {
+      if (line.kind === "machine" && line.units.some((u) => !u.serial.trim())) {
+        toast.error(`Enter a serial code for every "${line.description}" unit`);
+        return;
+      }
+    }
+    setConfirming(true);
+    try {
+      for (const line of confirmPlan) {
+        if (line.kind === "machine") {
+          for (const u of line.units) {
+            const pd = (line.samePurchase ? line.sharedPurchase : u.purchase_date) || undefined;
+            const sd = (line.stampingSame ? (line.samePurchase ? line.sharedPurchase : u.purchase_date) : u.stamping_date) || undefined;
+            await createMachine({
+              code: u.serial.trim(),
+              model: line.description,
+              category: confirmFor.category || undefined,
+              purchase_date: pd,
+              invoice_date: pd,
+              stamping_date: sd,
+              buy_price: line.unit_price || undefined,
+            });
+          }
+        } else {
+          if (line.spareId) {
+            await moveSpare(Number(line.spareId), { qty: line.qty, reason: "receive", note: `PO ${confirmFor.po_no}` });
+          } else {
+            await createSpare({
+              name: line.description,
+              category: confirmFor.category || undefined,
+              quantity: line.qty,
+              unit: "pcs",
+              unit_cost: line.unit_price || 0,
+              reorder_level: 0,
+            });
+          }
+        }
+      }
+      await updatePurchaseOrder(confirmFor.id, { status: "confirmed" });
+      toast.success(`PO ${confirmFor.po_no} confirmed — stock received`);
+      setConfirmFor(null);
+      load();
+      loadOutstanding();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not confirm purchase order");
+    } finally {
+      setConfirming(false);
     }
   }
 
@@ -248,6 +365,9 @@ export default function PurchaseOrders() {
                 <td className="px-2 py-2"><span className={`text-xs px-2 py-0.5 rounded capitalize ${statusClass[po.status]}`}>{po.status}</span></td>
                 <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                   <div className="flex gap-2">
+                    {po.status === "open" && (
+                      <button className="text-sky-600 hover:text-sky-800" onClick={() => openConfirm(po)} title="Confirm & receive into inventory"><CheckCircle2 className="h-4 w-4" /></button>
+                    )}
                     <button className="text-muted-foreground hover:text-foreground" onClick={() => openEdit(po)} title="Edit"><Pencil className="h-4 w-4" /></button>
                     <button className="text-red-500 hover:text-red-700" onClick={() => handleDelete(po)} title="Delete"><Trash2 className="h-4 w-4" /></button>
                   </div>
@@ -326,8 +446,20 @@ export default function PurchaseOrders() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {!editingId && (
+                <div>
+                  <label className="text-xs text-muted-foreground">Purchase type</label>
+                  <Select value={form.payment_mode} onValueChange={(v) => setForm({ ...form, payment_mode: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash (paid in full)</SelectItem>
+                      <SelectItem value="credit">Credit (pay later)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {!editingId && form.payment_mode === "credit" && (
                 <div>
                   <label className="text-xs text-muted-foreground">Advance paid</label>
                   <Input type="number" value={form.advance} onChange={(e) => setForm({ ...form, advance: e.target.value })} />
@@ -384,7 +516,99 @@ export default function PurchaseOrders() {
                   <h3 className="font-medium mb-2">Payments</h3>
                   <PaymentLedger refType="po_register" refId={detail.id} />
                 </div>
+                {detail.status === "open" && (
+                  <div className="border-t pt-3">
+                    <Button className="gap-1" onClick={() => { const po = detail; setDetail(null); openConfirm(po); }}>
+                      <CheckCircle2 className="h-4 w-4" /> Confirm & receive into inventory
+                    </Button>
+                  </div>
+                )}
               </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Convert PO → confirmed: receive line items into inventory */}
+      <Dialog open={!!confirmFor} onOpenChange={(o) => !o && setConfirmFor(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {confirmFor && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5" /> Confirm {confirmFor.po_no} — receive stock</DialogTitle>
+              </DialogHeader>
+              {confirmPlan.length === 0 ? (
+                <p className="text-sm text-muted-foreground">This purchase order has no line items to receive.</p>
+              ) : (
+                <div className="space-y-4">
+                  {confirmPlan.map((line, li) => (
+                    <div key={li} className="border rounded-lg p-3 space-y-3">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="font-medium text-sm">{line.description} <span className="text-muted-foreground">× {line.qty}</span></div>
+                        <Select value={line.kind} onValueChange={(v) => setLine(li, { kind: v as "machine" | "spare" })}>
+                          <SelectTrigger className="w-40 h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="machine">Receive as machines</SelectItem>
+                            <SelectItem value="spare">Receive as spare</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {line.kind === "machine" ? (
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap gap-4">
+                            <label className="flex items-center gap-2 text-xs cursor-pointer">
+                              <input type="checkbox" checked={line.samePurchase} onChange={(e) => setLine(li, { samePurchase: e.target.checked })} />
+                              Same purchase date for all {line.qty} unit(s)
+                            </label>
+                            {line.samePurchase && (
+                              <Input type="date" className="h-8 w-40" value={line.sharedPurchase} onChange={(e) => setLine(li, { sharedPurchase: e.target.value })} />
+                            )}
+                            <label className="flex items-center gap-2 text-xs cursor-pointer">
+                              <input type="checkbox" checked={line.stampingSame} onChange={(e) => setLine(li, { stampingSame: e.target.checked })} />
+                              Stamping date same as purchase date
+                            </label>
+                          </div>
+                          <div className="space-y-2">
+                            {line.units.map((u, ui) => (
+                              <div key={ui} className="grid grid-cols-12 gap-2 items-center">
+                                <span className="col-span-1 text-xs text-muted-foreground">#{ui + 1}</span>
+                                <Input className="col-span-5 h-8" placeholder="Serial / code *" value={u.serial} onChange={(e) => setUnit(li, ui, { serial: e.target.value })} />
+                                <Input className="col-span-3 h-8" type="date" title="Purchase date" value={line.samePurchase ? line.sharedPurchase : u.purchase_date} disabled={line.samePurchase} onChange={(e) => setUnit(li, ui, { purchase_date: e.target.value })} />
+                                <Input className="col-span-3 h-8" type="date" title="Stamping date" value={line.stampingSame ? (line.samePurchase ? line.sharedPurchase : u.purchase_date) : u.stamping_date} disabled={line.stampingSame} onChange={(e) => setUnit(li, ui, { stamping_date: e.target.value })} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs text-muted-foreground">Add to spare</label>
+                            <Select value={line.spareId || "new"} onValueChange={(v) => setLine(li, { spareId: v === "new" ? "" : v })}>
+                              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="new">➕ Create new: {line.description}</SelectItem>
+                                {spares.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}{s.part_no ? ` (${s.part_no})` : ""}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-muted-foreground">Quantity received</label>
+                            <Input type="number" className="h-8" value={line.qty} onChange={(e) => setLine(li, { qty: Math.max(1, Number(e.target.value) || 1) })} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted-foreground">Confirming creates machines (one per serial) and receives spare quantities into stock, then marks this PO <span className="font-medium">confirmed</span>.</p>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmFor(null)}>Cancel</Button>
+                <Button onClick={doConfirm} disabled={confirming || confirmPlan.length === 0} className="gap-1">
+                  <CheckCircle2 className="h-4 w-4" /> {confirming ? "Receiving…" : "Confirm & receive"}
+                </Button>
+              </DialogFooter>
             </>
           )}
         </DialogContent>

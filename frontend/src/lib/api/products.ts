@@ -35,11 +35,7 @@ export interface ApiProduct {
   category: string | null;
   tag: string | null;
   tag_color: string | null;
-  suitable_for: string | null;
   image_url: string | null;
-  gcv: string | null;
-  ash_content: string | null;
-  moisture_content: string | null;
   is_available: boolean;
   configurations: ApiConfiguration[];
 }

@@ -73,6 +73,12 @@ export default function Purchases() {
   }
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [typeFilter, locationFilter]);
+  // Real-time search — debounced so we don't fire a request on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => load(), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   function openAdd() { setForm(emptyForm); setAddOpen(true); }
   function openEdit(p: Purchase) { setForm(toForm(p)); setEditItem(p); }
@@ -239,7 +245,7 @@ export default function Purchases() {
         <div className="relative">
           <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
           <Input className="pl-8 w-64" placeholder="Search vendor / PO no…" value={search}
-            onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
+            onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger className="w-36"><SelectValue placeholder="Type" /></SelectTrigger>
@@ -256,7 +262,6 @@ export default function Purchases() {
             {locations.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={load}>Search</Button>
         {totalOutstanding > 0 && (
           <span className="text-sm text-red-600 ml-auto flex items-center gap-1"><IndianRupee className="h-3.5 w-3.5" />{money(totalOutstanding)} outstanding</span>
         )}

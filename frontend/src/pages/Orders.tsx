@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
@@ -44,7 +45,7 @@ export interface Order {
   date: string;
   status: string;
   customer: {
-    name: string; phone: string; email: string; type: "Customer" | "Dealer";
+    name: string; customerId?: number | null; phone: string; email: string; type: "Customer" | "Dealer";
     // Customer fields
     deliveryAddress?: string; city?: string; pincode?: string;
     // Dealer fields
@@ -90,6 +91,7 @@ const emptyManualLine = (): ManualLine => ({ product_id: "", size: "", quantity:
 
 
 export default function Orders() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -100,7 +102,6 @@ export default function Orders() {
   const [paymentInput, setPaymentInput] = useState("");
   const [paymentStatusInput, setPaymentStatusInput] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
-  const [filterType, setFilterType] = useState("All");
   const [invoiceBusy, setInvoiceBusy] = useState(false);
 
   // Manual order entry
@@ -204,8 +205,7 @@ export default function Orders() {
       o.id.toLowerCase().includes(search.toLowerCase()) ||
       o.customer.name.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filterStatus === "All" || o.status === filterStatus;
-    const matchesType = filterType === "All" || o.customer.type === filterType;
-    return matchesSearch && matchesFilter && matchesType;
+    return matchesSearch && matchesFilter;
   });
 
   const viewOrder = (o: Order) => {
@@ -584,17 +584,6 @@ export default function Orders() {
       {/* Filter Tabs */}
       <div className="space-y-2">
         <div className="flex flex-wrap gap-2">
-          {["All", "Customer", "Dealer"].map(t => (
-            <button
-              key={t}
-              onClick={() => setFilterType(t)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${filterType === t ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2">
           {["All", ...statusFlow].map(s => (
             <button
               key={s}
@@ -633,7 +622,18 @@ export default function Orders() {
                 <tr key={o.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-6 py-4 text-sm font-medium text-primary">{o.id}</td>
                   <td className="px-6 py-4">
-                    <span className="text-sm text-card-foreground">{o.customer.name}</span>
+                    {o.customer.customerId ? (
+                      <button
+                        type="button"
+                        className="text-sm text-primary hover:underline"
+                        onClick={() => navigate(`/customers?customer=${o.customer.customerId}`)}
+                        title="View customer profile"
+                      >
+                        {o.customer.name}
+                      </button>
+                    ) : (
+                      <span className="text-sm text-card-foreground">{o.customer.name}</span>
+                    )}
                     <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${o.customer.type === "Dealer" ? "bg-indigo-500/15 text-indigo-400" : "bg-primary/10 text-primary"}`}>{o.customer.type}</span>
                   </td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">{o.items.length} item(s) — {o.grandTotal}</td>

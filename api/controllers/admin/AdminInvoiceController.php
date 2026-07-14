@@ -34,6 +34,12 @@ class AdminInvoiceController
             $where[]  = 'o.user_id = ?';
             $params[] = $userId;
         }
+        // Exact (case-insensitive) customer name match — used by the Customers page to
+        // show invoices for a customer even when they were never linked to an order/user_id.
+        if ($custName = $request->query('customer_name')) {
+            $where[]  = 'LOWER(COALESCE(i.customer_name, u.name)) = LOWER(?)';
+            $params[] = $custName;
+        }
         $status = $request->query('status');
         $allStatuses = ['paid', 'Paid', 'unpaid', 'cancelled', 'Cancelled', 'Draft', 'Sent', 'Overdue'];
         if ($status && in_array($status, $allStatuses, true)) {

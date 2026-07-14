@@ -190,6 +190,9 @@ class AdminQuotationController
                 'qty'            => $qty,
                 'unit'           => trim((string) ($it['unit'] ?? '')),
                 'specifications' => trim((string) ($it['specifications'] ?? '')) ?: null,
+                'capacity'       => trim((string) ($it['capacity'] ?? '')) ?: null,
+                'accuracy'       => trim((string) ($it['accuracy'] ?? '')) ?: null,
+                'platform_size'  => trim((string) ($it['platform_size'] ?? '')) ?: null,
                 'gst_rate'       => $itemGstRate,
                 'rate'           => $rate,
                 'amount'         => $amount,
@@ -268,7 +271,7 @@ class AdminQuotationController
         $order = 0;
         foreach ($items as $it) {
             Database::insert(
-                'INSERT INTO quotation_items (quotation_id, sort_order, name, make, qty, unit, specifications, gst_rate, rate, amount, components) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                'INSERT INTO quotation_items (quotation_id, sort_order, name, make, qty, unit, specifications, capacity, accuracy, platform_size, gst_rate, rate, amount, components) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 [
                     $quotationId,
                     $order++,
@@ -277,6 +280,9 @@ class AdminQuotationController
                     $it['qty'],
                     $it['unit'] ?: null,
                     $it['specifications'] ?? null,
+                    $it['capacity'] ?? null,
+                    $it['accuracy'] ?? null,
+                    $it['platform_size'] ?? null,
                     $it['gst_rate'] ?? 18,
                     $it['rate'],
                     $it['amount'],
@@ -289,7 +295,7 @@ class AdminQuotationController
     private function loadItems(int $quotationId): array
     {
         $rows = Database::fetchAll(
-            'SELECT item_id, sort_order, name, make, qty, unit, specifications, gst_rate, rate, amount, components
+            'SELECT item_id, sort_order, name, make, qty, unit, specifications, capacity, accuracy, platform_size, gst_rate, rate, amount, components
              FROM quotation_items WHERE quotation_id = ? ORDER BY sort_order ASC, item_id ASC',
             [$quotationId]
         );

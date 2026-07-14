@@ -19,6 +19,7 @@ export interface ApiOrderItem {
 export interface ApiOrder {
   order_id: number;
   order_number: string;
+  user_id: number | null;
   total_amount: number;
   delivery_fee: number;
   order_status: string;
@@ -45,6 +46,23 @@ export interface ApiOrder {
 
 export async function fetchOrders(limit = 100): Promise<ApiOrder[]> {
   const res = await apiFetch<{ data: ApiOrder[] }>(`/orders?limit=${limit}`);
+  return res.data ?? [];
+}
+
+// ── Order history for one customer (Customers page detail view) ───────────
+
+export interface CustomerOrderRow {
+  order_id: number;
+  order_number: string;
+  total_amount: number;
+  order_status: string;
+  payment_status: string;
+  created_at: string;
+  total_items: number;
+}
+
+export async function fetchCustomerOrders(userId: number, limit = 10): Promise<CustomerOrderRow[]> {
+  const res = await apiFetch<{ data: CustomerOrderRow[] }>(`/admin/users/${userId}/orders?limit=${limit}`);
   return res.data ?? [];
 }
 
@@ -181,6 +199,7 @@ export function mapApiOrderToUI(o: ApiOrder, items: ApiOrderItem[]): Order {
     status: capitalize(o.order_status),
     customer: {
       name: o.customer_name,
+      customerId: o.user_id,
       phone: o.phone,
       email: o.email,
       type: isDealer ? "Dealer" : "Customer",

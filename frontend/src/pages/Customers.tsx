@@ -1,7 +1,8 @@
-import { Search, Eye, Home, Briefcase, MapPin, KeyRound } from "lucide-react";
+import { Search, Eye, Home, Briefcase, MapPin, KeyRound, FileText, Truck, ShoppingCart } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
@@ -13,7 +14,18 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { fetchCustomers, fetchCustomerOrderStats, updateCustomerStatus, mapApiUserToUI } from "@/lib/api/customers";
+import { fetchCustomerOrders, type CustomerOrderRow } from "@/lib/api/orders";
+import { fetchDeliveries, type DeliveryNote } from "@/lib/api/deliveries";
+import { apiFetch } from "@/lib/api/client";
 import { ScrollableX } from "@/components/ui/scrollable-x";
+
+interface CustomerInvoiceRow {
+  invoice_id: number;
+  invoice_number: string;
+  total: number;
+  status: string;
+  created_at: string;
+}
 export interface Customer {
   id: number;
   name: string;
@@ -34,13 +46,18 @@ export interface Customer {
 }
 
 export default function Customers() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Customer | null>(null);
   const [open, setOpen] = useState(false);
   const [statsLoading, setStatsLoading] = useState(false);
-
+  const [custOrders, setCustOrders] = useState<CustomerOrderRow[]>([]);
+  const [custInvoices, setCustInvoices] = useState<CustomerInvoiceRow[]>([]);
+  const [custDeliveries, setCustDeliveries] = useState<DeliveryNote[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -51,6 +68,15 @@ export default function Customers() {
       .catch(() => toast.error("Failed to load customers"))
       .finally(() => setLoading(false));
   }, []);
+
+  // Deep-link from Orders (or anywhere else): /customers?customer=<id> auto-opens that profile.
+  useEffect(() => {
+    const id = Number(searchParams.get("customer"));
+    if (!id || customers.length === 0) return;
+    const match = customers.find(c => c.id === id);
+    if (match) view(match);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customers, searchParams]);
 
   const filtered = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -81,6 +107,21 @@ export default function Customers() {
       })
       .catch(() => toast.error("Could not load order stats"))
       .finally(() => setStatsLoading(false));
+
+    // Full relationship history — orders, invoices, delivery challans.
+    setHistoryLoading(true);
+    Promise.all([
+      fetchCustomerOrders(c.id).catch(() => []),
+      apiFetch<{ data: CustomerInvoiceRow[] }>(`/admin/invoices?customer_name=${encodeURIComponent(c.name)}&limit=10`)
+        .then(r => r.data ?? []).catch(() => []),
+      fetchDeliveries({ search: c.name }).then(r => r.rows).catch(() => []),
+    ])
+      .then(([orders, invoices, deliveries]) => {
+        setCustOrders(orders);
+        setCustInvoices(invoices);
+        setCustDeliveries(deliveries);
+      })
+      .finally(() => setHistoryLoading(false));
   };
 
   const handleResetPassword = () => {
@@ -93,7 +134,6 @@ export default function Customers() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Customers</h1>
-        <p className="text-muted-foreground">Users registered as "Customer" in the mobile app</p>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -104,9 +144,10 @@ export default function Customers() {
           </DialogHeader>
           {selected && (
             <Tabs defaultValue="profile" className="mt-2">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
                 <TabsTrigger value="stats">Order Stats</TabsTrigger>
+                <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
 
               <TabsContent value="profile" className="space-y-3 py-2">
@@ -212,6 +253,89 @@ export default function Customers() {
                     <p className="text-xs text-muted-foreground">Returned</p>
                   </div>
                 </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="history" className="space-y-4 py-2">
+                {historyLoading ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">Loading history…</p>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground"><ShoppingCart className="h-4 w-4" /> Recent Orders</span>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate("/orders")}>View all</Button>
+                      </div>
+                      {custOrders.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No orders yet.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {custOrders.map(o => (
+                            <div key={o.order_id} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
+                              <div>
+                                <span className="font-medium text-foreground">{o.order_number}</span>
+                                <span className="ml-2 text-xs text-muted-foreground">{o.created_at?.slice(0, 10)}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-[10px] capitalize">{o.order_status}</Badge>
+                                <span className="font-medium text-primary">₹{o.total_amount.toLocaleString("en-IN")}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground"><FileText className="h-4 w-4" /> Invoices</span>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate("/invoices")}>View all</Button>
+                      </div>
+                      {custInvoices.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No invoices yet.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {custInvoices.map(inv => (
+                            <div key={inv.invoice_id} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
+                              <div>
+                                <span className="font-medium text-foreground">{inv.invoice_number}</span>
+                                <span className="ml-2 text-xs text-muted-foreground">{inv.created_at?.slice(0, 10)}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-[10px] capitalize">{inv.status}</Badge>
+                                <span className="font-medium text-primary">₹{Number(inv.total).toLocaleString("en-IN")}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground"><Truck className="h-4 w-4" /> Delivery Challans</span>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate("/deliveries")}>View all</Button>
+                      </div>
+                      {custDeliveries.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No delivery challans yet.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {custDeliveries.map(d => (
+                            <div key={d.id} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
+                              <div>
+                                <span className="font-medium text-foreground">{d.challan_no}</span>
+                                <span className="ml-2 text-xs text-muted-foreground">{d.delivery_date?.slice(0, 10) ?? "—"}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-[10px] capitalize">{d.status}</Badge>
+                                <span className="font-medium text-primary">{d.amount != null ? `₹${Number(d.amount).toLocaleString("en-IN")}` : "—"}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </TabsContent>
             </Tabs>

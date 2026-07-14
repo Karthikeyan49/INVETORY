@@ -72,7 +72,7 @@ export default function SalesBilling() {
   const [lines, setLines] = useState<ApiRow[]>([blankLine()]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [savingDoc, setSavingDoc] = useState(false);
-  const [cert, setCert] = useState<ApiRow>({ batch_number: "", product_name: "", customer_name: "", test_date: today(), valid_until: "", moisture_content: "", ash_content: "", gcv: "", status: "draft", notes: "" });
+  const [cert, setCert] = useState<ApiRow>({ batch_number: "", product_name: "", customer_name: "", test_date: today(), valid_until: "", status: "draft", notes: "" });
   const [certFile, setCertFile] = useState<File | null>(null);
 
   const payments = useQuery({ queryKey: ["phase2", "payments"], queryFn: () => phase2Api.payments.list() });
@@ -188,9 +188,6 @@ export default function SalesBilling() {
           product_name: cert.product_name,
           customer_name: cert.customer_name,
           valid_until: cert.valid_until,
-          moisture_content: cert.moisture_content,
-          ash_content: cert.ash_content,
-          gcv: cert.gcv,
         },
       },
     });
@@ -394,9 +391,6 @@ export default function SalesBilling() {
             <Field label="Test date"><Input type="date" value={cert.test_date} onChange={(e) => setCert({ ...cert, test_date: e.target.value })} /></Field>
             <Field label="Valid until"><Input type="date" value={cert.valid_until} onChange={(e) => setCert({ ...cert, valid_until: e.target.value })} /></Field>
             <Field label="Document upload"><Input type="file" accept=".pdf,image/*" onChange={(e) => setCertFile(e.target.files?.[0] ?? null)} /></Field>
-            <Field label="Moisture"><Input value={cert.moisture_content} onChange={(e) => setCert({ ...cert, moisture_content: e.target.value })} /></Field>
-            <Field label="Ash"><Input value={cert.ash_content} onChange={(e) => setCert({ ...cert, ash_content: e.target.value })} /></Field>
-            <Field label="GCV"><Input value={cert.gcv} onChange={(e) => setCert({ ...cert, gcv: e.target.value })} /></Field>
           </div>
           <Field label="Notes"><Textarea value={cert.notes} onChange={(e) => setCert({ ...cert, notes: e.target.value })} /></Field>
           <div className="flex justify-end"><Button onClick={createCertificate}>Create Certificate</Button></div>

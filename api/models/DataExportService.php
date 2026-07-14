@@ -16,7 +16,7 @@ class DataExportService
             ], 'created_at', 'approval_status', "user_type IN ('customer','dealer')"),
             'products' => self::definition('Products', 'products', [
                 'product_id', 'product_name', 'product_type', 'base_price', 'unit', 'category',
-                'gcv', 'ash_content', 'moisture_content', 'is_available', 'created_at',
+                'is_available', 'created_at',
             ], 'created_at', 'is_available'),
             'orders' => self::definition('Orders', 'orders', [
                 'order_id', 'order_number', 'user_id', 'total_amount', 'delivery_fee',

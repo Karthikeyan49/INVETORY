@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from "react";
-import { Plus, Search, Wrench, AlertTriangle, CheckCircle2, RotateCcw, Pencil, Trash2, MapPin, Check } from "lucide-react";
+import { Plus, Search, Wrench, AlertTriangle, CheckCircle2, RotateCcw, Pencil, Trash2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ const statusClass: Record<IssueStatus, string> = {
 
 type ViewFilter = "active" | "open" | "in_progress" | "resolved" | "all";
 
-const emptyForm = { machine_id: "", title: "", description: "", place: "", process: "Reported" };
+const emptyForm = { machine_id: "", title: "", description: "", process: "Reported" };
 
 export default function MachineIssues() {
   const [rows, setRows] = useState<MachineIssue[]>([]);
@@ -54,6 +54,12 @@ export default function MachineIssues() {
   }
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  // Real-time search — debounced so we don't fire a request on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => load(), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
   useEffect(() => { fetchMachines({ limit: 200 }).then((r) => setMachines(r.rows)).catch(() => {}); }, []);
 
   async function handleCreate() {
@@ -65,7 +71,6 @@ export default function MachineIssues() {
         machine_id: Number(form.machine_id),
         title: form.title.trim(),
         description: form.description.trim() || undefined,
-        place: form.place.trim() || undefined,
         process: form.process || undefined,
       });
       toast.success("Issue reported — machine moved to Maintenance");
@@ -146,6 +151,11 @@ export default function MachineIssues() {
         : r.status === view;
   const visibleRows = rows.filter(matchesView);
   const activeCount = rows.filter((r) => r.status !== "resolved").length;
+  const openCount = rows.filter((r) => r.status === "open").length;
+  const inProgressCount = rows.filter((r) => r.status === "in_progress").length;
+  const resolvedCount = rows.filter((r) => r.status === "resolved").length;
+  // Distinct machines that currently have an unresolved issue.
+  const machinesInIssue = new Set(rows.filter((r) => r.status !== "resolved").map((r) => r.machine_id)).size;
 
   return (
     <div className="p-6 space-y-6">
@@ -174,20 +184,14 @@ export default function MachineIssues() {
                 <label className="text-xs text-muted-foreground">Issue *</label>
                 <Input placeholder="e.g. Display panel not working" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground">Place (where it is)</label>
-                  <Input placeholder="e.g. Workshop / Customer site" value={form.place} onChange={(e) => setForm({ ...form, place: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Process (stage)</label>
-                  <Select value={form.process} onValueChange={(v) => setForm({ ...form, process: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {stages.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Process (stage)</label>
+                <Select value={form.process} onValueChange={(v) => setForm({ ...form, process: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {stages.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Details</label>
@@ -202,6 +206,26 @@ export default function MachineIssues() {
         </Dialog>
       </div>
 
+      {/* Mini dashboard */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="rounded-lg border p-4 bg-card">
+          <p className="text-xs text-muted-foreground">Machines in Issue</p>
+          <p className="text-2xl font-bold text-red-700">{machinesInIssue}</p>
+        </div>
+        <div className="rounded-lg border p-4 bg-card">
+          <p className="text-xs text-muted-foreground">Open</p>
+          <p className="text-2xl font-bold text-amber-600">{openCount}</p>
+        </div>
+        <div className="rounded-lg border p-4 bg-card">
+          <p className="text-xs text-muted-foreground">In Progress</p>
+          <p className="text-2xl font-bold text-sky-600">{inProgressCount}</p>
+        </div>
+        <div className="rounded-lg border p-4 bg-card">
+          <p className="text-xs text-muted-foreground">Resolved</p>
+          <p className="text-2xl font-bold text-green-600">{resolvedCount}</p>
+        </div>
+      </div>
+
       {activeCount > 0 && (
         <div className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-800">
           <AlertTriangle className="h-4 w-4" />
@@ -212,8 +236,8 @@ export default function MachineIssues() {
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative">
           <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-          <Input className="pl-8 w-64" placeholder="Search machine / issue / place…" value={search}
-            onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
+          <Input className="pl-8 w-64" placeholder="Search machine / issue…" value={search}
+            onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={view} onValueChange={(v) => setView(v as ViewFilter)}>
           <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
@@ -225,28 +249,26 @@ export default function MachineIssues() {
             <SelectItem value="all">All</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={load}>Search</Button>
       </div>
 
       <div className="border rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr className="text-left">
-              <th className="p-3">Machine</th><th className="p-3">Issue</th><th className="p-3">Place</th>
+              <th className="p-3">Machine</th><th className="p-3">Issue</th>
               <th className="p-3">Process</th><th className="p-3">Status</th><th className="p-3">Reported</th><th className="p-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td className="p-4 text-muted-foreground" colSpan={7}>Loading…</td></tr>
+              <tr><td className="p-4 text-muted-foreground" colSpan={6}>Loading…</td></tr>
             ) : visibleRows.length === 0 ? (
-              <tr><td className="p-4 text-muted-foreground" colSpan={7}>No issues here. Use “Report Issue” to log a machine fault.</td></tr>
+              <tr><td className="p-4 text-muted-foreground" colSpan={6}>No issues here. Use “Report Issue” to log a machine fault.</td></tr>
             ) : visibleRows.map((r) => (
               <Fragment key={r.id}>
                 <tr className="border-t align-top">
                   <td className="p-3 font-medium">{r.machine_code ?? `#${r.machine_id}`}<div className="text-xs text-muted-foreground">{r.machine_model}</div></td>
                   <td className="p-3">{r.title}{r.description && <div className="text-xs text-muted-foreground max-w-[220px]">{r.description}</div>}</td>
-                  <td className="p-3"><span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-muted-foreground" />{r.place || "—"}</span></td>
                   <td className="p-3"><span className="text-xs font-medium">{r.process || "—"}</span></td>
                   <td className="p-3">
                     {r.status === "resolved" ? (
@@ -275,7 +297,7 @@ export default function MachineIssues() {
                   </td>
                 </tr>
                 <tr className="bg-muted/10">
-                  <td colSpan={7} className="px-4 pb-4 pt-1">
+                  <td colSpan={6} className="px-4 pb-4 pt-1">
                     <IssueStepper
                       issue={r}
                       stages={stages}
@@ -349,11 +371,11 @@ function IssueStepper({ issue, stages, onPick }: {
 function EditIssueDialog({ row, stages, onClose, onSaved }: {
   row: MachineIssue | null; stages: string[]; onClose: () => void; onSaved: () => void;
 }) {
-  const [form, setForm] = useState({ title: "", description: "", place: "", process: "" });
+  const [form, setForm] = useState({ title: "", description: "", process: "" });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (row) setForm({ title: row.title, description: row.description ?? "", place: row.place ?? "", process: row.process ?? "" });
+    if (row) setForm({ title: row.title, description: row.description ?? "", process: row.process ?? "" });
   }, [row]);
 
   async function save() {
@@ -364,7 +386,6 @@ function EditIssueDialog({ row, stages, onClose, onSaved }: {
       await updateIssue(row.id, {
         title: form.title.trim(),
         description: form.description.trim(),
-        place: form.place.trim(),
         process: form.process,
       });
       toast.success("Issue updated");
@@ -385,18 +406,12 @@ function EditIssueDialog({ row, stages, onClose, onSaved }: {
             <label className="text-xs text-muted-foreground">Issue *</label>
             <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Place (where it is)</label>
-              <Input value={form.place} onChange={(e) => setForm({ ...form, place: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Process (stage)</label>
-              <Select value={form.process} onValueChange={(v) => setForm({ ...form, process: v })}>
-                <SelectTrigger><SelectValue placeholder="Stage" /></SelectTrigger>
-                <SelectContent>{stages.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Process (stage)</label>
+            <Select value={form.process} onValueChange={(v) => setForm({ ...form, process: v })}>
+              <SelectTrigger><SelectValue placeholder="Stage" /></SelectTrigger>
+              <SelectContent>{stages.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+            </Select>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Details</label>

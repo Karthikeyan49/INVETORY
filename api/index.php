@@ -376,9 +376,11 @@ $router->get('/admin/users/pending',           [AdminUserController::class, 'pen
 $router->post('/admin/users/{id}/approve',     [AdminUserController::class, 'approve'],    'admin');
 $router->post('/admin/users/{id}/reject',      [AdminUserController::class, 'reject'],     'admin');
 $router->get('/admin/users/{id}/stats',        [AdminUserController::class, 'orderStats'], 'admin');
+$router->get('/admin/users/{id}/orders',       [AdminUserController::class, 'customerOrders'], 'admin');
 $router->get('/admin/users',                   [AdminUserController::class, 'index'],      'admin');
 $router->put('/admin/users/{id}/status',       [AdminUserController::class, 'updateStatus'],'admin');
 $router->post('/admin/users',               [AdminUserController::class,    'store'],        'admin');
+$router->post('/admin/users/find-or-create',[AdminUserController::class,    'findOrCreate'], 'admin');
 $router->put('/admin/users/{id}',           [AdminUserController::class,    'update'],       'admin');
 $router->delete('/admin/users/{id}',        [AdminUserController::class,    'destroy'],      'admin');
 
@@ -412,6 +414,7 @@ $router->delete('/admin/products/{id}/configurations/{cid}', [AdminPricingContro
 
 // Admin Procurement - Vendors
 $router->get('/admin/vendors',                  [AdminVendorController::class, 'index'],       'admin');
+$router->get('/admin/vendors/analytics',        [AdminVendorController::class, 'analytics'],   'admin');
 $router->post('/admin/vendors',                 [AdminVendorController::class, 'store'],       'admin:owner,accountant');
 $router->get('/admin/vendors/{id}/performance', [AdminVendorController::class, 'performance'], 'admin');
 $router->get('/admin/vendors/{id}',             [AdminVendorController::class, 'show'],        'admin');

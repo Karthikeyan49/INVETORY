@@ -246,7 +246,7 @@ class MachineController
     public function store(Request $request): void
     {
         $data = $request->only([
-            'code', 'model', 'category', 'machine_type', 'accuracy', 'platform_size', 'capacity', 'customer_id', 'zone_id',
+            'code', 'model', 'category', 'machine_type', 'brand_name', 'accuracy', 'platform_size', 'capacity', 'customer_id', 'zone_id',
             'status', 'purchase_date', 'invoice_date', 'stamping_date', 'sold_date', 'notes',
             'hsn', 'buy_price', 'buy_gst_pct', 'sale_price', 'sale_gst_pct', 'tax_amount', 'extra_amount', 'extra_from_vendor',
         ]);
@@ -269,8 +269,9 @@ class MachineController
         // flows through to the Profit & Loss report automatically.
         $this->recordPurchaseExpense($data);
 
-        // Keep the stock-items count in sync: same model+category → quantity +1.
-        InventoryItem::incrementForMachine($data['model'] ?? null, $data['category'] ?? null);
+        // Keep the stock-items count in sync: same model+category → quantity +1
+        // (code → SKU, buy price → unit cost, so Stock value is populated).
+        InventoryItem::incrementForMachine($data['model'] ?? null, $data['category'] ?? null, $data['code'] ?? null, $data['buy_price'] ?? null);
 
         // Auto-open a stamping record from the stamping date; if blank it starts
         // as 'pending' so the Stamping page + dashboard flag it as "not done yet".
@@ -360,7 +361,7 @@ class MachineController
             Response::error('Machine not found', 404);
         }
         $data = $request->only([
-            'code', 'model', 'category', 'accuracy', 'platform_size', 'capacity', 'customer_id', 'zone_id',
+            'code', 'model', 'category', 'brand_name', 'accuracy', 'platform_size', 'capacity', 'customer_id', 'zone_id',
             'purchase_date', 'invoice_date', 'stamping_date', 'sold_date', 'notes',
             'hsn', 'buy_price', 'buy_gst_pct', 'sale_price', 'sale_gst_pct', 'tax_amount', 'extra_amount', 'extra_from_vendor',
         ]);

@@ -5,6 +5,7 @@ import { Plus, Trash2, FileDown, Pencil, FileText, ChevronLeft, GripVertical, Li
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   listQuotations, getQuotation, createQuotation, updateQuotation, deleteQuotation,
   QUOTATION_KINDS,
@@ -12,11 +13,10 @@ import {
 } from "@/lib/api/quotations";
 import { downloadQuotation as downloadSrivariQuotation, type QuotationRow as SrivariRow } from "@/lib/srivariQuotationPdf";
 import { createDelivery } from "@/lib/api/deliveries";
-import {
-  listComponents, createComponent, bulkCreateComponents, deleteComponent,
-  type LibraryComponent,
-} from "@/lib/api/components";
-import { fetchProducts, type UIProduct } from "@/lib/api/products";
+import { type LibraryComponent } from "@/lib/api/components";
+import { type UIProduct, type ApiProduct } from "@/lib/api/products";
+import { fetchMachines, type Machine } from "@/lib/api/machines";
+import { fetchSpares, type Spare } from "@/lib/api/spares";
 import { invoicesApi, GST_RATES } from "@/lib/api/invoices";
 import { settingsApi } from "@/lib/api/settings";
 import { stateFromGstin } from "@/lib/gstState";
@@ -35,8 +35,53 @@ const today = () => new Date().toISOString().slice(0, 10);
 const inr = (n: number) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const suggestRef = () => `VB_TN-${Date.now() % 10000}`;
 
+// The quotation palette is sourced from real inventory: Machines become the
+// draggable line items, Spares become the draggable components. Each is adapted
+// into the builder's existing internal shapes so the rest of the page is unchanged.
+function machineToPalette(m: Machine): UIProduct {
+  const price = Number(m.sale_price ?? 0);
+  const gst = Number(m.sale_gst_pct ?? 18);
+  const name = [m.model, m.code].filter(Boolean).join(" — ") || m.code;
+  return {
+    id: m.id,
+    product: name,
+    sizes: [],
+    purposes: [],
+    subPurposes: {},
+    description: [m.accuracy, m.platform_size, m.capacity].filter(Boolean).join(" · "),
+    category: m.category || "Machines",
+    gstRate: gst,
+    minOrderQty: 1,
+    imageUrl: "",
+    _raw: { base_price: price, unit: "Nos", gst_rate: gst, product_name: name } as unknown as ApiProduct,
+  };
+}
+function spareToLibrary(s: Spare): LibraryComponent {
+  return {
+    component_id: s.id,
+    name: s.name,
+    make: s.part_no ?? undefined,
+    default_unit: s.unit ?? undefined,
+    default_qty: 1,
+    category: s.category ?? undefined,
+  };
+}
+
 const blankComponent = () => ({ group: "", name: "", make: "", qty: 1 });
-const blankItem = (): QuotationItem => ({ name: "", make: "", qty: 1, unit: "Nos", rate: 0, amount: 0, specifications: "", gst_rate: 18, components: [] });
+const blankItem = (): QuotationItem => ({
+  name: "", make: "", qty: 1, unit: "Nos", rate: 0, amount: 0, specifications: "",
+  capacity: "", accuracy: "", platform_size: "",
+  gst_rate: 18, components: [],
+});
+
+// Which spec columns each Sri Vari format actually prints — drives which
+// fields the item form shows (capacity/accuracy everywhere but Service;
+// platform size only on Retail/Industrial, matching the four PDF layouts).
+const kindSpecFields = (kind: QuotationKind) => ({
+  capacity: kind !== "service",
+  accuracy: kind !== "service",
+  platformSize: kind === "retail" || kind === "industrial",
+});
 
 type Header = {
   customer_name: string; customer_address: string; customer_gstin: string;
@@ -62,6 +107,8 @@ const blankHeader = (): Header => ({
 export default function QuotationBuilder() {
   const navigate = useNavigate();
   const [view, setView] = useState<"list" | "form">("list");
+  // Ask which Sri Vari letterhead format to use before opening a new quotation.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [rows, setRows] = useState<QuotationListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -75,8 +122,6 @@ export default function QuotationBuilder() {
   // ── component library ─────────────────────────────────────────────────────
   const [library, setLibrary] = useState<LibraryComponent[]>([]);
   const [dragOverItem, setDragOverItem] = useState<number | null>(null);
-  const blankNewLib = () => ({ name: "", make: "", default_unit: "", category: "", default_qty: 1 });
-  const [newLib, setNewLib] = useState(blankNewLib());
 
   // ── products palette ──────────────────────────────────────────────────────
   const [products, setProducts] = useState<UIProduct[]>([]);
@@ -106,9 +151,9 @@ export default function QuotationBuilder() {
   };
 
   const loadLibrary = () =>
-    listComponents()
-      .then(setLibrary)
-      .catch(() => { /* library is best-effort; don't block the page */ });
+    fetchSpares({})
+      .then(({ rows }) => setLibrary(rows.map(spareToLibrary)))
+      .catch(() => { /* spares palette is best-effort; don't block the page */ });
 
   const load = () => {
     setLoading(true);
@@ -118,8 +163,8 @@ export default function QuotationBuilder() {
   useEffect(() => { loadLibrary(); }, []);
   useEffect(() => {
     setProdStatus("loading");
-    fetchProducts()
-      .then((p) => { setProducts(p); setProdStatus("ready"); })
+    fetchMachines({ limit: 500 })
+      .then(({ rows }) => { setProducts(rows.map(machineToPalette)); setProdStatus("ready"); })
       .catch(() => { setProdStatus("error"); });
   }, []);
   // Default quotation terms from Settings (pre-fills new quotations; editable).
@@ -261,6 +306,7 @@ export default function QuotationBuilder() {
       rate,
       amount: rate * qty,
       specifications: p.description || p.category || "",
+      capacity: "", accuracy: "", platform_size: "",
       gst_rate: Number(p._raw?.gst_rate ?? p.gstRate ?? 18),
       components: [],
     };
@@ -273,14 +319,14 @@ export default function QuotationBuilder() {
     const text = promptText.trim();
     if (!text) { toast.error("Type what you need, e.g. \"70 solar panels, 1 inverter 60kw for VELS\""); return; }
     if (products.length === 0) {
-      if (prodStatus === "loading") toast.error("Products are still loading — try again in a moment");
-      else if (prodStatus === "error") toast.error("Couldn't load products. Check you're signed in and the API is reachable, then reload.");
-      else toast.error("No products in your catalog yet. Add products first (Products page), then build from a prompt.");
+      if (prodStatus === "loading") toast.error("Machines are still loading — try again in a moment");
+      else if (prodStatus === "error") toast.error("Couldn't load machines. Check you're signed in and the API is reachable, then reload.");
+      else toast.error("No machines yet. Add machines first (Machines page), then build from a prompt.");
       return;
     }
     const parsed = parseQuotationPrompt(text, products);
     if (parsed.matches.length === 0) {
-      toast.error("Couldn't match any products. Use names from your catalog (e.g. \"Solar Panel\", \"Inverter\").");
+      toast.error("Couldn't match any machines. Use names from your Machines list (e.g. the model or code).");
       return;
     }
     const extra = parsed.unmatched.length ? ` · ${parsed.unmatched.length} not matched` : "";
@@ -414,60 +460,17 @@ export default function QuotationBuilder() {
     if (match) updComp(i, ci, { name, make: match.make || "" });
   };
 
-  const addToLibrary = async () => {
-    const name = newLib.name.trim();
-    if (!name) { toast.error("Component name is required"); return; }
-    try {
-      await createComponent({
-        name,
-        make: newLib.make.trim() || undefined,
-        default_unit: newLib.default_unit.trim() || undefined,
-        category: newLib.category.trim() || undefined,
-        default_qty: Number(newLib.default_qty) || undefined,
-      });
-      setNewLib(blankNewLib());
-      await loadLibrary();
-      toast.success(`"${name}" added to library`);
-    } catch (e: any) { toast.error(e?.message ?? "Failed to add component"); }
-  };
+  // Spares are now the component palette; they're managed on the Spares page, so
+  // the quotation no longer creates/deletes/syncs its own component records.
+  const syncLibraryFromItems = async () => { /* no-op: spares live on the Spares page */ };
 
-  const removeFromLibrary = async (c: LibraryComponent) => {
-    try {
-      await deleteComponent(c.component_id);
-      await loadLibrary();
-    } catch (e: any) { toast.error(e?.message ?? "Failed to delete component"); }
+  const startNew = (kind: QuotationKind) => {
+    setEditingId(null);
+    setHeader({ ...blankHeader(), quotation_kind: kind, terms: orgQuotationTerms || DEFAULT_TERMS });
+    setItems([]);
+    setPickerOpen(false);
+    setView("form");
   };
-
-  // Persist any manually-entered components not yet in the library (best-effort).
-  const syncLibraryFromItems = async () => {
-    try {
-      const existing = new Set(
-        library.map((c) => `${(c.name || "").trim().toLowerCase()}|${(c.make || "").trim().toLowerCase()}|${(c.category || "").trim().toLowerCase()}`)
-      );
-      const toAdd = new Map<string, Omit<LibraryComponent, "component_id">>();
-      for (const it of items) {
-        for (const c of it.components || []) {
-          const name = (c.name || "").trim();
-          if (!name) continue;
-          const make = (c.make || "").trim();
-          const category = (c.group || "").trim();
-          const key = `${name.toLowerCase()}|${make.toLowerCase()}|${category.toLowerCase()}`;
-          if (existing.has(key) || toAdd.has(key)) continue;
-          toAdd.set(key, {
-            name,
-            make: make || undefined,
-            category: category || undefined,
-            default_qty: Number(c.qty) || undefined,
-          });
-        }
-      }
-      if (toAdd.size === 0) return;
-      await bulkCreateComponents(Array.from(toAdd.values()));
-      await loadLibrary();
-    } catch { /* library sync must never block saving */ }
-  };
-
-  const startNew = () => { setEditingId(null); setHeader({ ...blankHeader(), terms: orgQuotationTerms || DEFAULT_TERMS }); setItems([]); setView("form"); };
   const startEdit = async (id: number) => {
     try {
       const q = await getQuotation(id);
@@ -512,7 +515,10 @@ export default function QuotationBuilder() {
       const common = { sno: String(i + 1), qty: it.qty != null ? String(it.qty) : undefined, basicPrice: base || undefined };
       return kind === "service"
         ? { ...common, description: [it.name, it.make, it.specifications].filter(Boolean).join(" — ") }
-        : { ...common, model: it.name, unitPrice: Number(it.rate) || undefined };
+        : {
+            ...common, model: it.name, unitPrice: Number(it.rate) || undefined,
+            capacity: it.capacity || undefined, accuracy: it.accuracy || undefined, platformSize: it.platform_size || undefined,
+          };
     });
 
   // Download the current quotation in the chosen Sri Vari letterhead format (R2).
@@ -666,8 +672,31 @@ export default function QuotationBuilder() {
             <h1 className="text-2xl font-bold text-foreground">Quotation Builder</h1>
             <p className="text-muted-foreground">Assemble quotations and download branded PDFs.</p>
           </div>
-          <Button onClick={startNew} className="gap-2"><Plus className="h-4 w-4" /> New Quotation</Button>
+          <Button onClick={() => setPickerOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> New Quotation</Button>
         </div>
+
+        {/* Ask which Sri Vari format before opening the builder */}
+        <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Which quotation format?</DialogTitle>
+              <DialogDescription>Pick the Sri Vari letterhead this quotation should use — you can still change it later in the form.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2">
+              {QUOTATION_KINDS.map((k) => (
+                <button
+                  key={k.value}
+                  type="button"
+                  onClick={() => startNew(k.value)}
+                  className="rounded-lg border p-3 text-left text-sm transition-colors hover:border-primary hover:bg-primary/5"
+                >
+                  <div className="font-semibold text-foreground">{k.label}</div>
+                  <div className="text-xs text-muted-foreground">{k.description}</div>
+                </button>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <div className="rounded-xl border bg-card">
           <div className="grid grid-cols-12 gap-2 border-b px-4 py-2.5 text-xs font-semibold text-muted-foreground">
@@ -811,12 +840,12 @@ export default function QuotationBuilder() {
       </div>
 
       {paletteOpen && (<>
-      {/* Component Library palette */}
+      {/* Spares palette (add-ons dragged onto a machine line) */}
       <div className="rounded-xl border bg-card p-5 space-y-4 shadow-sm">
         <div className="flex items-center gap-2">
           <Library className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold text-foreground">Component Library</span>
-          <span className="text-xs text-muted-foreground">Drag a chip onto an item, or click + to add it to the last item.</span>
+          <span className="text-sm font-semibold text-foreground">Spares</span>
+          <span className="text-xs text-muted-foreground">Drag a spare onto a machine line, or click + to add it to the last line.</span>
         </div>
 
         {library.length > 0 && (
@@ -825,16 +854,16 @@ export default function QuotationBuilder() {
             <Input
               value={libSearch}
               onChange={(e) => setLibSearch(e.target.value)}
-              placeholder="Search components by name, make or category…"
+              placeholder="Search spares by name, part no or category…"
               className="h-9 pl-8 text-sm"
             />
           </div>
         )}
 
         {library.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No saved components yet. Add one below, or save a quotation to remember its components.</p>
+          <p className="text-xs text-muted-foreground">No spares yet. Add them on the Spares page — they’ll appear here to drag onto machine lines.</p>
         ) : libByCategory.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No components match “{libSearch}”.</p>
+          <p className="text-xs text-muted-foreground">No spares match “{libSearch}”.</p>
         ) : (
           <div className="space-y-3">
             {libByCategory.map(([cat, comps]) => (
@@ -859,14 +888,8 @@ export default function QuotationBuilder() {
                         type="button"
                         onClick={() => addLibToLastItem(c)}
                         className="ml-0.5 grid h-5 w-5 place-items-center rounded-full text-muted-foreground hover:bg-primary hover:text-primary-foreground"
-                        title="Add to last item"
+                        title="Add to last line"
                       ><Plus className="h-3 w-3" /></button>
-                      <button
-                        type="button"
-                        onClick={() => removeFromLibrary(c)}
-                        className="grid h-5 w-5 place-items-center rounded-full text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
-                        title="Remove from library"
-                      ><Trash2 className="h-3 w-3" /></button>
                     </div>
                   ))}
                 </div>
@@ -875,41 +898,15 @@ export default function QuotationBuilder() {
           </div>
         )}
 
-        {/* Inline add-to-library form */}
-        <div className="space-y-2 border-t pt-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Add a component</p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 sm:col-span-2">
-              <span className="text-xs text-muted-foreground">Name *</span>
-              <Input placeholder="e.g. Earthing Kit" value={newLib.name} onChange={(e) => setNewLib((s) => ({ ...s, name: e.target.value }))} className="h-9 text-sm" />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">Make</span>
-              <Input placeholder="e.g. ABB" value={newLib.make} onChange={(e) => setNewLib((s) => ({ ...s, make: e.target.value }))} className="h-9 text-sm" />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">Category</span>
-              <Input placeholder="e.g. Protection" value={newLib.category} onChange={(e) => setNewLib((s) => ({ ...s, category: e.target.value }))} className="h-9 text-sm" />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">Unit</span>
-              <Input placeholder="e.g. Nos" value={newLib.default_unit} onChange={(e) => setNewLib((s) => ({ ...s, default_unit: e.target.value }))} className="h-9 text-sm" />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">Default qty</span>
-              <Input type="number" placeholder="1" value={newLib.default_qty} onChange={(e) => setNewLib((s) => ({ ...s, default_qty: Number(e.target.value) }))} className="h-9 text-sm" />
-            </label>
-          </div>
-          <Button size="sm" variant="outline" className="h-9 w-full gap-1 text-xs" onClick={addToLibrary}><Plus className="h-3.5 w-3.5" /> Add to library</Button>
-        </div>
+        <p className="border-t pt-3 text-xs text-muted-foreground">Spares come from the Spares page. Add or edit them there and they’ll appear here.</p>
       </div>
 
-      {/* Products palette */}
+      {/* Machines palette */}
       <div className="rounded-xl border bg-card p-5 space-y-4 shadow-sm">
         <div className="flex items-center gap-2">
           <Package className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold text-foreground">Products</span>
-          <span className="text-xs text-muted-foreground">Drag a product into the items list, or click + to add it as a new line item.</span>
+          <span className="text-sm font-semibold text-foreground">Machines</span>
+          <span className="text-xs text-muted-foreground">Drag a machine into the items list, or click + to add it as a new line item.</span>
         </div>
 
         {products.length > 0 && (
@@ -918,7 +915,7 @@ export default function QuotationBuilder() {
             <Input
               value={prodSearch}
               onChange={(e) => setProdSearch(e.target.value)}
-              placeholder="Search products by name or category…"
+              placeholder="Search machines by name or category…"
               className="h-9 pl-8 text-sm"
             />
           </div>
@@ -926,12 +923,12 @@ export default function QuotationBuilder() {
 
         {products.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            {prodStatus === "loading" ? "Loading products…"
-              : prodStatus === "error" ? "Couldn't load products — check you're signed in and reload."
-              : "No products in your catalog yet. Add them on the Products page."}
+            {prodStatus === "loading" ? "Loading machines…"
+              : prodStatus === "error" ? "Couldn't load machines — check you're signed in and reload."
+              : "No machines yet. Add them on the Machines page."}
           </p>
         ) : productsByCategory.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No products match “{prodSearch}”.</p>
+          <p className="text-xs text-muted-foreground">No machines match “{prodSearch}”.</p>
         ) : (
           <div className="space-y-3">
             {productsByCategory.map(([cat, prods]) => (
@@ -999,6 +996,15 @@ export default function QuotationBuilder() {
               <div className="md:col-span-1"><label className="text-xs text-muted-foreground">Unit</label><Input list="opt-unit" value={it.unit} onChange={(e) => updItem(i, { unit: e.target.value })} onBlur={(e) => remember("unit", e.target.value)} className="mt-1" /></div>
               <div className="md:col-span-2"><label className="text-xs text-muted-foreground">Rate (₹)</label><Input type="number" value={it.rate} onChange={(e) => updItem(i, { rate: Number(e.target.value) })} className="mt-1" /></div>
               <div className="md:col-span-2"><label className="text-xs text-muted-foreground">Amount (₹)</label><Input type="number" value={it.amount} onChange={(e) => updItem(i, { amount: Number(e.target.value) })} className="mt-1" /></div>
+              {kindSpecFields(header.quotation_kind).capacity && (
+                <div className="md:col-span-3"><label className="text-xs text-muted-foreground">Capacity</label><Input value={it.capacity ?? ""} onChange={(e) => updItem(i, { capacity: e.target.value })} placeholder="e.g. 30kg" className="mt-1" /></div>
+              )}
+              {kindSpecFields(header.quotation_kind).accuracy && (
+                <div className="md:col-span-3"><label className="text-xs text-muted-foreground">Accuracy</label><Input value={it.accuracy ?? ""} onChange={(e) => updItem(i, { accuracy: e.target.value })} placeholder="e.g. 1g" className="mt-1" /></div>
+              )}
+              {kindSpecFields(header.quotation_kind).platformSize && (
+                <div className="md:col-span-3"><label className="text-xs text-muted-foreground">Platform Size</label><Input value={it.platform_size ?? ""} onChange={(e) => updItem(i, { platform_size: e.target.value })} placeholder="e.g. 400x400" className="mt-1" /></div>
+              )}
               <div className="md:col-span-10"><label className="text-xs text-muted-foreground">Specifications</label><Input value={it.specifications ?? ""} onChange={(e) => updItem(i, { specifications: e.target.value })} placeholder="Technical specifications / details" className="mt-1" /></div>
               <div className="md:col-span-2">
                 <label className="text-xs text-muted-foreground">GST %</label>
@@ -1020,14 +1026,14 @@ export default function QuotationBuilder() {
               className={`rounded-lg p-3 transition-colors duration-150 ring-2 ring-inset ${dragOverItem === i ? "bg-primary/10 ring-primary/60" : "bg-muted/30 ring-transparent"}`}
             >
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold text-muted-foreground">Components / specification</span>
-                <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => addComp(i)}><Plus className="h-3.5 w-3.5" /> Add component</Button>
+                <span className="text-xs font-semibold text-muted-foreground">Spares / add-ons</span>
+                <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => addComp(i)}><Plus className="h-3.5 w-3.5" /> Add spare</Button>
               </div>
-              {it.components.length === 0 && <p className="text-xs text-muted-foreground">No components added. Drag a chip from the library above.</p>}
+              {it.components.length === 0 && <p className="text-xs text-muted-foreground">No spares added. Drag one from the Spares palette above.</p>}
               {it.components.map((c, ci) => (
                 <div key={ci} className="mb-2 grid items-center gap-2 md:grid-cols-12">
                   <Input list="opt-group" placeholder="Group (optional)" value={c.group} onChange={(e) => updComp(i, ci, { group: e.target.value })} onBlur={(e) => remember("group", e.target.value)} className="md:col-span-3 h-8 text-sm" />
-                  <Input list="component-options" placeholder="Component name" value={c.name} onChange={(e) => updComp(i, ci, { name: e.target.value })} onBlur={(e) => autofillFromLibrary(i, ci, e.target.value)} className="md:col-span-4 h-8 text-sm" />
+                  <Input list="component-options" placeholder="Spare name" value={c.name} onChange={(e) => updComp(i, ci, { name: e.target.value })} onBlur={(e) => autofillFromLibrary(i, ci, e.target.value)} className="md:col-span-4 h-8 text-sm" />
                   <Input list="opt-make" placeholder="Make" value={c.make} onChange={(e) => updComp(i, ci, { make: e.target.value })} onBlur={(e) => remember("make", e.target.value)} className="md:col-span-3 h-8 text-sm" />
                   <Input type="number" placeholder="Qty" value={c.qty} onChange={(e) => updComp(i, ci, { qty: Number(e.target.value) })} className="md:col-span-1 h-8 text-sm" />
                   <Button size="sm" variant="ghost" className="md:col-span-1 h-8 w-8 p-0 text-destructive" onClick={() => delComp(i, ci)}><Trash2 className="h-4 w-4" /></Button>

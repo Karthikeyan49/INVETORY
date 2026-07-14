@@ -13,6 +13,7 @@ import MachineIssues from "./pages/MachineIssues";
 import MachineMovementsLog from "./pages/MachineMovementsLog";
 import InventoryItems from "./pages/InventoryItems";
 import Purchases from "./pages/Purchases";
+import Vendors from "./pages/Vendors";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import Stamping from "./pages/Stamping";
 import Followups from "./pages/Followups";
@@ -116,6 +117,7 @@ function ProtectedRoutes() {
         <Route path="/inventory-items" element={<InventoryItems />} />
         <Route path="/spares" element={<Spares />} />
         <Route path="/purchases" element={<Purchases />} />
+        <Route path="/vendors" element={<Vendors />} />
         <Route path="/purchase-orders" element={<PurchaseOrders />} />
         <Route path="/stamping" element={<Stamping />} />
         <Route path="/followups" element={<Followups />} />

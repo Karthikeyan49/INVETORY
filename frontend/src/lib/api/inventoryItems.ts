@@ -11,6 +11,9 @@ export interface InventoryItem {
   sku: string | null;
   quantity: number;
   unit_cost: number;
+  // Machine buy price wins over unit_cost when this item matches a machine model — see stock_value.
+  effective_unit_cost: number;
+  stock_value: number;
   unit: string;
   location: string | null;
   notes: string | null;
