@@ -95,6 +95,7 @@ require_once ROOT_PATH . '/services/DemandForecast.php';
 require_once ROOT_PATH . '/services/ApprovalWorkflow.php';
 require_once ROOT_PATH . '/services/GstinLookupService.php';
 require_once ROOT_PATH . '/helpers/JWT.php';
+require_once ROOT_PATH . '/helpers/Money.php';
 require_once ROOT_PATH . '/helpers/Validator.php';
 require_once ROOT_PATH . '/helpers/InventoryPermissions.php';
 require_once ROOT_PATH . '/helpers/TimesFmClient.php';

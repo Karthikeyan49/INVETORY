@@ -30,9 +30,13 @@ class Order
             // Changed to 0 as per requirements so orders do not have unexpected charges.
             $deliveryFee = 0;
 
-            // Calculate total from items
-            $itemsTotal = array_reduce($items, fn($carry, $item) => $carry + ((float)$item['unit_price'] * (int)$item['quantity']), 0.0);
-            $totalAmount = $itemsTotal + $deliveryFee;
+            // Calculate total from items — round each line and the grand total
+            // to 2 dp (paise) so no sub-cent float drift reaches the DECIMAL column.
+            $itemsTotal = Money::sum(array_map(
+                fn($item) => Money::lineTotal($item['unit_price'], $item['quantity']),
+                $items
+            ));
+            $totalAmount = Money::round($itemsTotal + $deliveryFee);
 
             $orderId = Database::insert(
                 'INSERT INTO orders
@@ -63,8 +67,8 @@ class Order
                         (int)$item['product_id'],
                         isset($item['config_id']) ? (int)$item['config_id'] : null,
                         (int)$item['quantity'],
-                        (float)$item['unit_price'],
-                        (float)$item['unit_price'] * (int)$item['quantity'],
+                        Money::round($item['unit_price']),
+                        Money::lineTotal($item['unit_price'], $item['quantity']),
                         $item['size']    ?? null,
                         $item['purpose'] ?? null,
                         $item['sub_purpose'] ?? null,
