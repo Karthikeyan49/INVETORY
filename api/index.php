@@ -244,7 +244,7 @@ $router->get('/auth/me',        [AuthController::class, 'me'],      true);
 
 // Users
 $router->get('/users/{id}',               [UserController::class, 'show'],           true);
-$router->get('/users/email/{email}',      [UserController::class, 'findByEmail'],    true);
+$router->get('/users/email/{email}',      [UserController::class, 'findByEmail'],    'admin'); // was auth=true → leaked any user's PII
 $router->put('/users/{id}',               [UserController::class, 'update'],         true);
 $router->put('/users/{id}/password',      [UserController::class, 'changePassword'], true);
 $router->delete('/users/{id}',            [UserController::class, 'deactivate'],     true);
@@ -258,102 +258,102 @@ $router->get('/products/{id}/configurations',          [ProductController::class
 $router->get('/products/{id}/price',                   [ProductController::class, 'price']);   // ?size=8mm[&purpose=...]
 $router->get('/products/{id}/sizes',                   [ProductController::class, 'sizes']);    // distinct available sizes
 
-// Machines (requirement.txt — Module 1)
-$router->get('/machines',                            [MachineController::class, 'index'],        true);
-$router->get('/machines/dispatch-recommendations',   [MachineController::class, 'dispatch'],     true); // Module 4 (before {id})
-$router->get('/machines/alerts',                     [MachineController::class, 'alerts'],       true); // line 8 (before {id})
-$router->get('/machines/catalog',                    [MachineController::class, 'catalog'],      true); // dropdown/autofill (before {id})
-$router->get('/machines/tax-summary',                [MachineController::class, 'taxSummary'],   true); // lines 2,18 (before {id})
-$router->post('/machines',                           [MachineController::class, 'store'],        true);
-$router->get('/machines/{id}',                       [MachineController::class, 'show'],         true);
-$router->put('/machines/{id}',                       [MachineController::class, 'update'],       true);
-$router->put('/machines/{id}/status',                [MachineController::class, 'updateStatus'], true);
-$router->get('/machine-movements',                   [MachineController::class, 'movementsFeed'], true); // global feed (before {id})
-$router->get('/machines/{id}/movements',             [MachineController::class, 'movements'],    true);
-$router->get('/machines/{id}/parts',                 [MachineController::class, 'parts'],        true);
-$router->post('/machines/{id}/parts',                [MachineController::class, 'addPart'],      true);
-$router->put('/machines/{id}/parts/{partId}',        [MachineController::class, 'updatePart'],   true); // edit part
-$router->post('/machines/{id}/parts/{partId}/transfer', [MachineController::class, 'transferPart'], true); // Module 3
-$router->post('/machines/{id}/convert/delivery',     [MachineController::class, 'convertToDelivery'], true);
-$router->post('/machines/{id}/convert/invoice',      [MachineController::class, 'convertToInvoice'],  true);
+// Machines (requirement.txt — Module 1) — staff-only back-office module
+$router->get('/machines',                            [MachineController::class, 'index'],        'admin');
+$router->get('/machines/dispatch-recommendations',   [MachineController::class, 'dispatch'],     'admin'); // Module 4 (before {id})
+$router->get('/machines/alerts',                     [MachineController::class, 'alerts'],       'admin'); // line 8 (before {id})
+$router->get('/machines/catalog',                    [MachineController::class, 'catalog'],      'admin'); // dropdown/autofill (before {id})
+$router->get('/machines/tax-summary',                [MachineController::class, 'taxSummary'],   'admin'); // lines 2,18 (before {id})
+$router->post('/machines',                           [MachineController::class, 'store'],        'admin');
+$router->get('/machines/{id}',                       [MachineController::class, 'show'],         'admin');
+$router->put('/machines/{id}',                       [MachineController::class, 'update'],       'admin');
+$router->put('/machines/{id}/status',                [MachineController::class, 'updateStatus'], 'admin');
+$router->get('/machine-movements',                   [MachineController::class, 'movementsFeed'], 'admin'); // global feed (before {id})
+$router->get('/machines/{id}/movements',             [MachineController::class, 'movements'],    'admin');
+$router->get('/machines/{id}/parts',                 [MachineController::class, 'parts'],        'admin');
+$router->post('/machines/{id}/parts',                [MachineController::class, 'addPart'],      'admin');
+$router->put('/machines/{id}/parts/{partId}',        [MachineController::class, 'updatePart'],   'admin'); // edit part
+$router->post('/machines/{id}/parts/{partId}/transfer', [MachineController::class, 'transferPart'], 'admin'); // Module 3
+$router->post('/machines/{id}/convert/delivery',     [MachineController::class, 'convertToDelivery'], 'admin');
+$router->post('/machines/{id}/convert/invoice',      [MachineController::class, 'convertToInvoice'],  'admin:owner,accountant'); // creates invoice+order (revenue)
 
-// Stampings (requirement.txt — Module 2)
-$router->get('/stampings',               [StampingController::class, 'index'],        true);
-$router->get('/stampings/due',           [StampingController::class, 'due'],          true); // before {id}-style
-$router->get('/stampings/alerts',        [StampingController::class, 'alerts'],       true); // dashboard buckets
-$router->post('/stampings',              [StampingController::class, 'store'],        true);
-$router->put('/stampings/{id}/renew',    [StampingController::class, 'renew'],        true);
-$router->put('/stampings/{id}/status',   [StampingController::class, 'updateStatus'], true);
-$router->put('/stampings/{id}/fee',      [StampingController::class, 'updateFee'],    true);
+// Stampings (requirement.txt — Module 2) — staff-only
+$router->get('/stampings',               [StampingController::class, 'index'],        'admin');
+$router->get('/stampings/due',           [StampingController::class, 'due'],          'admin'); // before {id}-style
+$router->get('/stampings/alerts',        [StampingController::class, 'alerts'],       'admin'); // dashboard buckets
+$router->post('/stampings',              [StampingController::class, 'store'],        'admin');
+$router->put('/stampings/{id}/renew',    [StampingController::class, 'renew'],        'admin');
+$router->put('/stampings/{id}/status',   [StampingController::class, 'updateStatus'], 'admin');
+$router->put('/stampings/{id}/fee',      [StampingController::class, 'updateFee'],    'admin:owner,accountant'); // fee = money
 
-// Machine Issues — service / fault tracking
-$router->get('/machine-issues',              [MachineIssueController::class, 'index'],   true);
-$router->post('/machine-issues',             [MachineIssueController::class, 'store'],   true);
-$router->get('/machine-issues/{id}',         [MachineIssueController::class, 'show'],    true);
-$router->put('/machine-issues/{id}',         [MachineIssueController::class, 'update'],  true);
-$router->put('/machine-issues/{id}/resolve', [MachineIssueController::class, 'resolve'], true);
-$router->put('/machine-issues/{id}/reopen',  [MachineIssueController::class, 'reopen'],  true);
-$router->delete('/machine-issues/{id}',      [MachineIssueController::class, 'destroy'], true);
+// Machine Issues — service / fault tracking — staff-only
+$router->get('/machine-issues',              [MachineIssueController::class, 'index'],   'admin');
+$router->post('/machine-issues',             [MachineIssueController::class, 'store'],   'admin');
+$router->get('/machine-issues/{id}',         [MachineIssueController::class, 'show'],    'admin');
+$router->put('/machine-issues/{id}',         [MachineIssueController::class, 'update'],  'admin');
+$router->put('/machine-issues/{id}/resolve', [MachineIssueController::class, 'resolve'], 'admin');
+$router->put('/machine-issues/{id}/reopen',  [MachineIssueController::class, 'reopen'],  'admin');
+$router->delete('/machine-issues/{id}',      [MachineIssueController::class, 'destroy'], 'admin');
 
-// Purchases — vendor purchases (cash/credit) → posts an expense → P&L
-$router->get('/purchases/locations',    [PurchaseController::class, 'locations'],    true); // before {id}
-$router->get('/purchases',              [PurchaseController::class, 'index'],        true);
-$router->post('/purchases',             [PurchaseController::class, 'store'],        true);
-$router->get('/purchases/{id}',         [PurchaseController::class, 'show'],         true);
-$router->put('/purchases/{id}',         [PurchaseController::class, 'update'],       true);
-$router->post('/purchases/{id}/payment',[PurchaseController::class, 'payment'],      true);
-$router->delete('/purchases/{id}',      [PurchaseController::class, 'destroy'],      true);
+// Purchases — vendor purchases (cash/credit) → posts an expense → P&L (owner/accountant for writes)
+$router->get('/purchases/locations',    [PurchaseController::class, 'locations'],    'admin'); // before {id}
+$router->get('/purchases',              [PurchaseController::class, 'index'],        'admin');
+$router->post('/purchases',             [PurchaseController::class, 'store'],        'admin:owner,accountant');
+$router->get('/purchases/{id}',         [PurchaseController::class, 'show'],         'admin');
+$router->put('/purchases/{id}',         [PurchaseController::class, 'update'],       'admin:owner,accountant');
+$router->post('/purchases/{id}/payment',[PurchaseController::class, 'payment'],      'admin:owner,accountant');
+$router->delete('/purchases/{id}',      [PurchaseController::class, 'destroy'],      'admin:owner,accountant');
 
-// Inventory Items — simple stock register
-$router->get('/inventory-items',        [InventoryItemController::class, 'index'],   true);
-$router->post('/inventory-items',       [InventoryItemController::class, 'store'],   true);
-$router->get('/inventory-items/{id}',   [InventoryItemController::class, 'show'],    true);
-$router->put('/inventory-items/{id}',   [InventoryItemController::class, 'update'],  true);
-$router->delete('/inventory-items/{id}',[InventoryItemController::class, 'destroy'], true);
+// Inventory Items — simple stock register — staff-only
+$router->get('/inventory-items',        [InventoryItemController::class, 'index'],   'admin');
+$router->post('/inventory-items',       [InventoryItemController::class, 'store'],   'admin');
+$router->get('/inventory-items/{id}',   [InventoryItemController::class, 'show'],    'admin');
+$router->put('/inventory-items/{id}',   [InventoryItemController::class, 'update'],  'admin');
+$router->delete('/inventory-items/{id}',[InventoryItemController::class, 'destroy'], 'admin');
 
-// Spares — spare-parts stock register with low-stock + forecast (R6 / T6)
-$router->get('/spares/low-stock',       [SpareController::class, 'lowStock'],  true); // before {id}
-$router->get('/spares/forecast',        [SpareController::class, 'forecast'],  true); // before {id}
-$router->get('/spares',                 [SpareController::class, 'index'],     true);
-$router->post('/spares',                [SpareController::class, 'store'],     true);
-$router->get('/spares/{id}',            [SpareController::class, 'show'],       true);
-$router->put('/spares/{id}',            [SpareController::class, 'update'],     true);
-$router->post('/spares/{id}/move',      [SpareController::class, 'move'],       true);
-$router->delete('/spares/{id}',         [SpareController::class, 'destroy'],    true);
+// Spares — spare-parts stock register with low-stock + forecast (R6 / T6) — staff-only
+$router->get('/spares/low-stock',       [SpareController::class, 'lowStock'],  'admin'); // before {id}
+$router->get('/spares/forecast',        [SpareController::class, 'forecast'],  'admin'); // before {id}
+$router->get('/spares',                 [SpareController::class, 'index'],     'admin');
+$router->post('/spares',                [SpareController::class, 'store'],     'admin');
+$router->get('/spares/{id}',            [SpareController::class, 'show'],       'admin');
+$router->put('/spares/{id}',            [SpareController::class, 'update'],     'admin');
+$router->post('/spares/{id}/move',      [SpareController::class, 'move'],       'admin');
+$router->delete('/spares/{id}',         [SpareController::class, 'destroy'],    'admin');
 
-// Delivery challans (requirement.txt — lines 6, 8, 14)
-$router->get('/deliveries',              [DeliveryController::class, 'index'],        true);
-$router->post('/deliveries',             [DeliveryController::class, 'store'],        true);
-$router->get('/deliveries/{id}',         [DeliveryController::class, 'show'],         true);
-$router->put('/deliveries/{id}/status',  [DeliveryController::class, 'updateStatus'], true);
+// Delivery challans (requirement.txt — lines 6, 8, 14) — staff-only
+$router->get('/deliveries',              [DeliveryController::class, 'index'],        'admin');
+$router->post('/deliveries',             [DeliveryController::class, 'store'],        'admin');
+$router->get('/deliveries/{id}',         [DeliveryController::class, 'show'],         'admin');
+$router->put('/deliveries/{id}/status',  [DeliveryController::class, 'updateStatus'], 'admin');
 
-// Follow-ups (requirement.txt — Module 6)
-$router->get('/followups',               [FollowupController::class, 'index'],        true);
-$router->get('/followups/due',           [FollowupController::class, 'due'],          true);
-$router->post('/followups',              [FollowupController::class, 'store'],        true);
-$router->put('/followups/{id}',          [FollowupController::class, 'update'],       true);
+// Follow-ups (requirement.txt — Module 6) — staff-only
+$router->get('/followups',               [FollowupController::class, 'index'],        'admin');
+$router->get('/followups/due',           [FollowupController::class, 'due'],          'admin');
+$router->post('/followups',              [FollowupController::class, 'store'],        'admin');
+$router->put('/followups/{id}',          [FollowupController::class, 'update'],       'admin');
 
 // Orders
-$router->get('/orders',          [OrderController::class, 'index'],         true);
-$router->post('/orders',         [OrderController::class, 'store'],         true);
-$router->get('/orders/{id}',     [OrderController::class, 'show'],          true);
-$router->put('/orders/{id}/status',         [OrderController::class, 'updateStatus'],        true);
-$router->put('/orders/{id}/payment',        [OrderController::class, 'updatePayment'],       true);
-$router->put('/orders/{id}/payment-status', [OrderController::class, 'updatePaymentStatus'], true);
-$router->put('/orders/{id}/refund-status',  [OrderController::class, 'updateRefundStatus'],  true);
+$router->get('/orders',          [OrderController::class, 'index'],         'admin');       // ALL orders → staff only (customers use /users/{id}/orders)
+$router->post('/orders',         [OrderController::class, 'store'],         true);          // customer places their own order
+$router->get('/orders/{id}',     [OrderController::class, 'show'],          true);          // handler enforces admin-or-owner
+$router->put('/orders/{id}/status',         [OrderController::class, 'updateStatus'],        'admin');                  // fulfilment = staff
+$router->put('/orders/{id}/payment',        [OrderController::class, 'updatePayment'],       'admin');
+$router->put('/orders/{id}/payment-status', [OrderController::class, 'updatePaymentStatus'], 'admin:owner,accountant'); // marks paid → generates invoice
+$router->put('/orders/{id}/refund-status',  [OrderController::class, 'updateRefundStatus'],  'admin:owner,accountant');
 
 // Admin manual order entry (staff enter walk-in orders by hand — no customer app)
 $router->post('/admin/orders',   [OrderController::class, 'storeManual'], 'admin');
 
-// Statistics
-$router->get('/statistics/orders',        [StatisticsController::class, 'orders'],       true);
-$router->get('/statistics/active-orders', [StatisticsController::class, 'activeOrders'], true);
-$router->get('/statistics/overview',      [StatisticsController::class, 'overview'],     true);
-$router->get('/statistics/employees',     [StatisticsController::class, 'employees'],    true);
-$router->get('/statistics/tasks',         [StatisticsController::class, 'tasks'],        true);
-$router->get('/statistics/sales',         [StatisticsController::class, 'sales'],        true);
-$router->get('/statistics/revenue',       [StatisticsController::class, 'revenue'],      true);
-$router->get('/statistics/customers',     [StatisticsController::class, 'customers'],    true);
+// Statistics — staff-only (aggregate revenue/sales/customer metrics)
+$router->get('/statistics/orders',        [StatisticsController::class, 'orders'],       'admin');
+$router->get('/statistics/active-orders', [StatisticsController::class, 'activeOrders'], 'admin');
+$router->get('/statistics/overview',      [StatisticsController::class, 'overview'],     'admin');
+$router->get('/statistics/employees',     [StatisticsController::class, 'employees'],    'admin');
+$router->get('/statistics/tasks',         [StatisticsController::class, 'tasks'],        'admin');
+$router->get('/statistics/sales',         [StatisticsController::class, 'sales'],        'admin');
+$router->get('/statistics/revenue',       [StatisticsController::class, 'revenue'],      'admin');
+$router->get('/statistics/customers',     [StatisticsController::class, 'customers'],    'admin');
 
 // Public Queries & Quotes
 $router->post('/queries', [QueryController::class, 'store']); // Auth optional (handled if token sent? Actually without AuthMiddleware user is null but that's fine for guests)
@@ -378,11 +378,11 @@ $router->post('/admin/users/{id}/reject',      [AdminUserController::class, 'rej
 $router->get('/admin/users/{id}/stats',        [AdminUserController::class, 'orderStats'], 'admin');
 $router->get('/admin/users/{id}/orders',       [AdminUserController::class, 'customerOrders'], 'admin');
 $router->get('/admin/users',                   [AdminUserController::class, 'index'],      'admin');
-$router->put('/admin/users/{id}/status',       [AdminUserController::class, 'updateStatus'],'admin');
-$router->post('/admin/users',               [AdminUserController::class,    'store'],        'admin');
+$router->put('/admin/users/{id}/status',       [AdminUserController::class, 'updateStatus'],'admin:owner'); // (de)activate accounts
+$router->post('/admin/users',               [AdminUserController::class,    'store'],        'admin:owner');
 $router->post('/admin/users/find-or-create',[AdminUserController::class,    'findOrCreate'], 'admin');
-$router->put('/admin/users/{id}',           [AdminUserController::class,    'update'],       'admin');
-$router->delete('/admin/users/{id}',        [AdminUserController::class,    'destroy'],      'admin');
+$router->put('/admin/users/{id}',           [AdminUserController::class,    'update'],       'admin:owner'); // can set staff_role → owner-only
+$router->delete('/admin/users/{id}',        [AdminUserController::class,    'destroy'],      'admin:owner');
 
 // Admin Dealer Network and Customer Intelligence
 $router->get('/admin/dealers',                       [AdminDealerController::class, 'index'],                 'admin:owner,sales,accountant');
@@ -548,14 +548,14 @@ $router->get('/admin/historical-invoices',     [HistoricalInvoiceController::cla
 
 // Admin Invoices
 $router->get('/admin/invoices',                [AdminInvoiceController::class, 'index'],    'admin');
-$router->post('/admin/invoices',               [AdminInvoiceController::class, 'store'],    'admin');
-$router->post('/admin/invoices/gst',           [AdminInvoiceController::class, 'storeGst'], 'admin');
+$router->post('/admin/invoices',               [AdminInvoiceController::class, 'store'],    'admin:owner,accountant');
+$router->post('/admin/invoices/gst',           [AdminInvoiceController::class, 'storeGst'], 'admin:owner,accountant');
 $router->get('/admin/invoices/{id}/download',  [AdminInvoiceController::class, 'download'], 'admin');
 $router->get('/admin/invoices/{id}/payments',  [AdminPaymentController::class, 'invoicePayments'], 'admin');
 $router->post('/admin/invoices/{id}/payments', [AdminPaymentController::class, 'storeForInvoice'], 'admin:owner,accountant');
 $router->get('/admin/invoices/{id}',           [AdminInvoiceController::class, 'show'],     'admin');
-$router->put('/admin/invoices/{id}',           [AdminInvoiceController::class, 'update'],   'admin');
-$router->delete('/admin/invoices/{id}',        [AdminInvoiceController::class, 'destroy'],  'admin');
+$router->put('/admin/invoices/{id}',           [AdminInvoiceController::class, 'update'],   'admin:owner,accountant');
+$router->delete('/admin/invoices/{id}',        [AdminInvoiceController::class, 'destroy'],  'admin:owner,accountant');
 
 // Admin Sales Billing - Payments and Receivables
 $router->get('/admin/payments',                [AdminPaymentController::class, 'index'],    'admin');
@@ -625,20 +625,20 @@ $router->post('/admin/gst-compliance/{period}/lock',        [AdminGstComplianceC
 $router->get('/admin/gst-compliance/{period}',              [AdminGstComplianceController::class, 'show'],      'admin:owner,accountant');
 
 $router->get('/admin/invoice-products',        [AdminInvoiceProductController::class, 'index'],   'admin');
-$router->post('/admin/invoice-products',       [AdminInvoiceProductController::class, 'store'],   'admin');
-$router->put('/admin/invoice-products/{id}',   [AdminInvoiceProductController::class, 'update'],  'admin');
-$router->delete('/admin/invoice-products/{id}',[AdminInvoiceProductController::class, 'destroy'], 'admin');
+$router->post('/admin/invoice-products',       [AdminInvoiceProductController::class, 'store'],   'admin:owner,accountant,sales');
+$router->put('/admin/invoice-products/{id}',   [AdminInvoiceProductController::class, 'update'],  'admin:owner,accountant,sales');
+$router->delete('/admin/invoice-products/{id}',[AdminInvoiceProductController::class, 'destroy'], 'admin:owner,accountant,sales');
 
 // Admin Expenses
 $router->get('/admin/expenses/analytics',       [AdminFinancePlanningController::class, 'expenseAnalytics'], 'admin:owner,accountant');
 $router->get('/admin/expenses',                [AdminExpenseController::class, 'index'],       'admin');
 $router->get('/admin/expenses/summary',        [AdminExpenseController::class, 'summary'],     'admin');
 $router->get('/admin/expenses/categories',     [AdminExpenseController::class, 'categories'],  'admin');
-$router->post('/admin/expenses/extract-bill',  [AdminExpenseController::class, 'extractBill'], 'admin');
+$router->post('/admin/expenses/extract-bill',  [AdminExpenseController::class, 'extractBill'], 'admin:owner,accountant');
 $router->get('/admin/expenses/{id}',           [AdminExpenseController::class, 'show'],        'admin');
-$router->post('/admin/expenses',               [AdminExpenseController::class, 'store'],       'admin');
-$router->put('/admin/expenses/{id}',           [AdminExpenseController::class, 'update'],      'admin');
-$router->delete('/admin/expenses/{id}',        [AdminExpenseController::class, 'destroy'],     'admin');
+$router->post('/admin/expenses',               [AdminExpenseController::class, 'store'],       'admin:owner,accountant');
+$router->put('/admin/expenses/{id}',           [AdminExpenseController::class, 'update'],      'admin:owner,accountant');
+$router->delete('/admin/expenses/{id}',        [AdminExpenseController::class, 'destroy'],     'admin:owner,accountant');
 
 // Admin Finance (Profit & Loss, Ratios, Config)
 $router->get('/admin/finance/overlay',          [AdminFinancePlanningController::class, 'overlay'],       'admin:owner,accountant');
@@ -646,8 +646,8 @@ $router->post('/admin/finance/ai-analysis',    [AdminFinanceController::class, '
 $router->get('/admin/finance/pnl',             [AdminFinanceController::class, 'pnl'],          'admin');
 $router->get('/admin/finance/statements',      [AdminFinanceController::class, 'statements'],   'admin');
 $router->get('/funding',                        [FundingController::class, 'index'],   'admin');
-$router->post('/funding',                       [FundingController::class, 'store'],   'admin');
-$router->delete('/funding/{id}',                [FundingController::class, 'destroy'], 'admin');
+$router->post('/funding',                       [FundingController::class, 'store'],   'admin:owner,accountant'); // capital/loan ledger → Balance Sheet
+$router->delete('/funding/{id}',                [FundingController::class, 'destroy'], 'admin:owner,accountant');
 $router->get('/admin/finance/ratios',          [AdminFinanceController::class, 'ratios'],       'admin');
 $router->get('/admin/finance/config',          [AdminFinanceController::class, 'config'],       'admin');
 $router->put('/admin/finance/config',          [AdminFinanceController::class, 'updateConfig'], 'admin');
@@ -701,7 +701,7 @@ $router->delete('/admin/faqs/{id}',         [AdminFaqController::class, 'destroy
 
 // Admin Settings
 $router->get('/admin/settings',             [AdminSettingsController::class, 'show'],         'admin');
-$router->put('/admin/settings',             [AdminSettingsController::class, 'update'],       'admin');
+$router->put('/admin/settings',             [AdminSettingsController::class, 'update'],       'admin:owner'); // bank account / GST rate / prefixes
 
 // Admin Attachments
 $router->get('/admin/attachments/{id}/download', [AdminAttachmentController::class, 'download'], 'admin');
@@ -796,9 +796,9 @@ $router->get('/admin/payroll/report',                 [AdminPayrollController::c
 $router->get('/admin/payroll/{id}/history',           [AdminPayrollController::class, 'history'],  'admin');
 $router->get('/admin/payroll/{id}',                   [AdminPayrollController::class, 'show'],     'admin');
 $router->post('/admin/payroll/ai-check',              [AdminPayrollController::class, 'aiCheck'],  'admin:owner,accountant,hr');
-$router->post('/admin/payroll/run',                   [AdminPayrollController::class, 'run'],      'admin');
-$router->post('/admin/payroll/calculate',             [AdminPayrollController::class, 'calculate'],'admin');
-$router->post('/admin/payroll/process',               [AdminPayrollController::class, 'process'],  'admin');
+$router->post('/admin/payroll/run',                   [AdminPayrollController::class, 'run'],      'admin:owner,accountant,hr');
+$router->post('/admin/payroll/calculate',             [AdminPayrollController::class, 'calculate'],'admin:owner,accountant,hr');
+$router->post('/admin/payroll/process',               [AdminPayrollController::class, 'process'],  'admin:owner,accountant,hr');
 
 // ─── Admin Incentive Payments (R7 / T10) — output-based pay, separate from payroll
 $router->get('/admin/incentives',                     [AdminIncentiveController::class, 'index'],   'admin');
@@ -818,9 +818,9 @@ $router->delete('/admin/dcr/{id}',                    [AdminDcrController::class
 
 // ─── Admin Employee Advances ────────────────────────────────────────────────
 $router->get('/admin/employee-advances',              [AdminEmployeeAdvanceController::class, 'index'],   'admin');
-$router->post('/admin/employee-advances',             [AdminEmployeeAdvanceController::class, 'store'],   'admin');
-$router->put('/admin/employee-advances/{id}',         [AdminEmployeeAdvanceController::class, 'update'],  'admin');
-$router->delete('/admin/employee-advances/{id}',      [AdminEmployeeAdvanceController::class, 'destroy'], 'admin');
+$router->post('/admin/employee-advances',             [AdminEmployeeAdvanceController::class, 'store'],   'admin:owner,accountant,hr');
+$router->put('/admin/employee-advances/{id}',         [AdminEmployeeAdvanceController::class, 'update'],  'admin:owner,accountant,hr');
+$router->delete('/admin/employee-advances/{id}',      [AdminEmployeeAdvanceController::class, 'destroy'], 'admin:owner,accountant,hr');
 
 // ─── Admin Meetings ──────────────────────────────────────────────────────────
 $router->get('/admin/meetings',                [AdminMeetingController::class, 'index'],            'admin');
@@ -861,10 +861,10 @@ $router->post('/admin/workflows',                 [AdminWorkflowController::clas
 $router->post('/admin/workflows/{id}/transition', [AdminWorkflowController::class, 'transition'], 'admin');
 $router->delete('/admin/workflows/{id}',          [AdminWorkflowController::class, 'destroy'],    'admin');
 
-// ─── Chat (public — auth optional) ───────────────────────────────────────────
-$router->post('/chat',              [ChatController::class, 'send']);
-$router->get('/chat/history',       [ChatController::class, 'history']);
-$router->get('/chat/debug',         [ChatController::class, 'debug']);
+// ─── Chat (staff assistant over business data — must be authenticated) ────────
+$router->post('/chat',              [ChatController::class, 'send'],    'admin');
+$router->get('/chat/history',       [ChatController::class, 'history'], 'admin');
+$router->get('/chat/debug',         [ChatController::class, 'debug'],   'admin:owner'); // diagnostics; also stops leaking key prefix (see ChatController)
 $router->get('/admin/chat/sessions',[ChatController::class, 'sessions'], 'admin');
 
 // Dispatch
