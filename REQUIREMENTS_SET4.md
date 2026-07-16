@@ -244,6 +244,21 @@ over a static `Database` helper) backend on Hostinger shared hosting.
     remains only in hr.ts MOCK_MODE, which is dev-only and never runs in production.)
   - npm build green.
 
+- **B15 NEXT (scoped, not started — resume here)**: Quotation Builder 4 distinct field-sets.
+  - Existing infra to build on (do NOT rebuild from scratch):
+    - `frontend/src/lib/api/quotations.ts`: `QuotationKind = "retail" | "industrial" | "service" | "stamping"`,
+      `QUOTATION_KINDS` (value/label/description).
+    - `frontend/src/pages/QuotationBuilder.tsx`: `startNew(kind)` type picker, `kindSpecFields(kind)`
+      already toggles capacity/accuracy/platformSize per kind, `toSrivariRows(kind, items)` maps to PDF.
+    - Reference PDFs: `docs/reference-pdfs/quotation-{retail,industrial,service,stamping}.pdf`.
+  - Plan: Read each of the 4 reference PDFs (use the `pdf` skill / Read pages). For each kind, define the
+    field-set that type actually needs (e.g. stamping → stamping fee/verification fields; service →
+    service scope/labour, no machine specs; industrial → capacity/accuracy/platform/attachments; retail →
+    simpler machine specs). Extend `kindSpecFields` + the QuotationBuilder form to render a DISTINCT set
+    per kind (not one generalized form), and ensure `toSrivariRows`/PDF renders each correctly.
+    Verify: build green + render each kind's PDF and compare to its reference.
+  - Deferred to next window intentionally (needs PDF analysis; kept out to avoid a half-done ship).
+
 ## 5. Blocked items
 - **Open PR from `fix/security-hardening` → `main`**: BLOCKED. GitHub returns
   "no history in common with main" (422). `git merge-base fix/security-hardening origin/main`
