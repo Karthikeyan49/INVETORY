@@ -190,6 +190,13 @@ class AdminPayrollController
             [$status, $month]
         );
 
+        // Finance link (B11): when payroll is marked Paid, post the month's total
+        // net pay to the expense ledger → P&L as "Salary & Wages". Idempotent —
+        // syncs the existing salary expense for the month instead of duplicating.
+        if ($status === 'Paid') {
+            $this->syncPayrollExpense($month, (int)($request->user['user_id'] ?? 0) ?: null);
+        }
+
         $result = Payroll::forMonth($month);
         Response::success([
             'month'    => $month,
@@ -382,6 +389,46 @@ class AdminPayrollController
             if (date('w', mktime(0, 0, 0, $m, $d, $y)) !== '0') $count++;
         }
         return $count;
+    }
+
+    /**
+     * Post/sync the month's total payroll net pay to the expense ledger so HR
+     * payroll flows into Finance / P&L (B11). A single "Salary & Wages" expense
+     * per month, keyed by a stable description marker so re-marking Paid updates
+     * (not duplicates) the entry. Best-effort — never blocks the status change.
+     */
+    private function syncPayrollExpense(string $month, ?int $userId): void
+    {
+        try {
+            $sumRow = Database::fetch("SELECT COALESCE(SUM(net_pay), 0) AS total FROM payroll WHERE month = ?", [$month]);
+            $total = round((float)($sumRow['total'] ?? 0), 2);
+            $marker = "Payroll salaries for $month";
+            $existing = Database::fetch(
+                "SELECT expense_id FROM expenses WHERE category = 'Salary & Wages' AND description = ? LIMIT 1",
+                [$marker]
+            );
+            if ($total <= 0) {
+                return; // nothing to post
+            }
+            $payDate = $month . '-01';
+            if ($existing) {
+                Database::execute(
+                    "UPDATE expenses SET amount = ?, expense_date = ? WHERE expense_id = ?",
+                    [$total, $payDate, (int)$existing['expense_id']]
+                );
+                return;
+            }
+            $count = Database::count('SELECT COUNT(*) AS cnt FROM expenses');
+            $code = 'EXP-' . str_pad((string)($count + 1), 4, '0', STR_PAD_LEFT);
+            Database::insert(
+                'INSERT INTO expenses
+                    (expense_code, expense_date, category, vendor, description, amount, payment_mode, created_by, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+                [$code, $payDate, 'Salary & Wages', 'Payroll', $marker, $total, 'Bank Transfer', $userId]
+            );
+        } catch (\Throwable $e) {
+            // Expense posting is best-effort; payroll status change already succeeded.
+        }
     }
 
     /**
