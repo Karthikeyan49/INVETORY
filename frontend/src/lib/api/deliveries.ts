@@ -45,7 +45,7 @@ function qs(p: Record<string, string | number | undefined | null>): string {
 }
 
 export async function fetchDeliveries(
-  filters: { status?: string; category?: string; search?: string } = {},
+  filters: { status?: string; category?: string; search?: string; customer_id?: number; customer_name?: string } = {},
 ): Promise<{ rows: DeliveryNote[]; nextChallan: string }> {
   const res = await apiFetch<ListResponse>(`/deliveries${qs({ ...filters, limit: 200 })}`);
   return { rows: res.data ?? [], nextChallan: res.pagination?.next_challan ?? "" };

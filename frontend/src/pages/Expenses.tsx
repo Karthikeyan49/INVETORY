@@ -13,6 +13,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { StatCard } from "@/components/StatCard";
 import { toast } from "sonner";
 import {
@@ -159,6 +160,11 @@ export default function Expenses() {
       ...items.map((expense) => expense.category).filter(Boolean),
     ])).sort((a, b) => a.localeCompare(b));
   }, [items]);
+
+  const availableVendors = useMemo(
+    () => Array.from(new Set(items.map((expense) => expense.vendor).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [items],
+  );
 
   const filtered = useMemo(() => {
     return items.filter((e) => {
@@ -581,7 +587,7 @@ export default function Expenses() {
 
             <div className="col-span-2">
               <Label>Vendor / Payee</Label>
-              <Input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} placeholder="e.g. Sri Lakshmi Traders" />
+              <Combobox options={availableVendors} value={form.vendor} onChange={(v) => setForm({ ...form, vendor: v })} placeholder="e.g. Sri Lakshmi Traders" />
             </div>
             <div className="col-span-2">
               <Label>Description</Label>

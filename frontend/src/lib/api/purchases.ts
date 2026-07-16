@@ -34,7 +34,8 @@ interface OneResponse { success: boolean; data: Purchase; message?: string; }
 export const PURCHASE_PAYMENT_MODES = ["Cash", "Bank Transfer", "UPI", "Cheque", "Card"] as const;
 
 export type PurchaseInput = Partial<Pick<Purchase,
-  "vendor_name" | "location" | "purchase_type" | "taxable" | "gst_pct" | "extra_amount" | "advance" | "payment_method" | "utr_no" | "purchase_date" | "notes">>;
+  "vendor_name" | "location" | "purchase_type" | "taxable" | "gst_pct" | "extra_amount" | "advance" | "payment_method" | "utr_no" | "purchase_date" | "notes">>
+  & { machine_id?: number };
 
 export async function fetchPurchases(params: { search?: string; type?: string; location?: string } = {}): Promise<{ rows: Purchase[]; locations: string[] }> {
   const q = new URLSearchParams();

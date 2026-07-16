@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Package, IndianRupee, ShoppingCart, Users, TrendingDown, RefreshCcw, Boxes, AlertTriangle, Stamp, BellRing } from "lucide-react";
+import { Package, IndianRupee, ShoppingCart, Users, TrendingDown, RefreshCcw, Boxes, AlertTriangle, Stamp, BellRing, Wrench, FileText, ClipboardList, Award } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -11,6 +11,11 @@ import { getIntelligenceSummary, getInventoryValuation } from "@/lib/api/invento
 import { fetchDueStampings, fetchStampingAlerts } from "@/lib/api/stampings";
 import { fetchLowStockSpares } from "@/lib/api/spares";
 import { fetchDueFollowups } from "@/lib/api/followups";
+import { fetchIssues } from "@/lib/api/machineIssues";
+import { fetchOutstanding } from "@/lib/api/poRegister";
+import { listQuotations } from "@/lib/api/quotations";
+import { fetchDcrs } from "@/lib/api/dcr";
+import { fetchIncentives } from "@/lib/api/incentives";
 
 const MONTH_LABELS: Record<string, string> = {
   "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr",
@@ -47,6 +52,26 @@ export default function Dashboard() {
   const { data: stampAlerts } = useQuery({ queryKey: ["stampings", "alerts"], queryFn: () => fetchStampingAlerts(7) });
   const { data: lowSpares } = useQuery({ queryKey: ["spares", "low-stock"], queryFn: () => fetchLowStockSpares() });
   const { data: dueFollowups } = useQuery({ queryKey: ["followups", "due"], queryFn: () => fetchDueFollowups(0) });
+  // Operations-at-a-glance sources (previously invisible on the dashboard):
+  const { data: issues } = useQuery({ queryKey: ["issues", "dash"], queryFn: () => fetchIssues({}) });
+  const { data: poOutstanding } = useQuery({ queryKey: ["po", "outstanding"], queryFn: () => fetchOutstanding() });
+  const { data: quotations } = useQuery({ queryKey: ["quotations", "dash"], queryFn: () => listQuotations() });
+  const { data: submittedDcrs } = useQuery({ queryKey: ["dcr", "submitted-dash"], queryFn: () => fetchDcrs({ status: "submitted" }) });
+  const { data: incentives } = useQuery({ queryKey: ["incentives", "dash"], queryFn: () => fetchIncentives({}) });
+
+  const openIssuesCount = useMemo(() => (issues?.rows ?? []).filter((i) => i.status !== "resolved").length, [issues]);
+  const quotesPending   = useMemo(() => (quotations ?? []).filter((q) => q.status !== "Accepted").length, [quotations]);
+  const dcrPending      = submittedDcrs?.length ?? 0;
+  const incentivesUnpaid = incentives?.summary.unpaid ?? 0;
+  const poDue = poOutstanding?.total_outstanding ?? 0;
+
+  const opsTiles = [
+    { to: "/machine-issues", icon: Wrench,        label: "Open machine issues",    value: String(openIssuesCount), sub: openIssuesCount > 0 ? "Needs attention" : "All clear",       alert: openIssuesCount > 0 },
+    { to: "/purchase-orders", icon: IndianRupee,  label: "PO outstanding",         value: fmtRupees(poDue),        sub: poDue > 0 ? "Payable to vendors" : "Nothing outstanding", alert: poDue > 0 },
+    { to: "/quotation-builder", icon: FileText,   label: "Quotations pending",     value: String(quotesPending),   sub: `${(quotations ?? []).length} total`,                     alert: false },
+    { to: "/dcr", icon: ClipboardList,            label: "DCRs awaiting approval", value: String(dcrPending),      sub: dcrPending > 0 ? "Review & approve" : "None pending",     alert: dcrPending > 0 },
+    { to: "/incentives", icon: Award,             label: "Incentives unpaid",      value: fmtRupees(incentivesUnpaid), sub: incentivesUnpaid > 0 ? "Pending payout" : "All settled", alert: incentivesUnpaid > 0 },
+  ];
 
   const chartData = useMemo(() => {
     if (!ordersStats) return [];
@@ -212,6 +237,31 @@ export default function Dashboard() {
             </p>
           </div>
         </Link>
+      </div>
+
+      {/* Operations at a glance — machine issues, purchasing, quotations, DCR, incentives */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-muted-foreground">Operations at a glance</h3>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          {opsTiles.map((t) => (
+            <Link
+              key={t.to}
+              to={t.to}
+              className={`flex flex-col gap-2 rounded-xl border p-4 shadow-sm transition hover:shadow-md ${
+                t.alert ? "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40" : "bg-card"
+              }`}
+            >
+              <div className={`w-fit rounded-lg p-2 ${t.alert ? "bg-amber-100 dark:bg-amber-900/40" : "bg-primary/10"}`}>
+                <t.icon className={`h-4 w-4 ${t.alert ? "text-amber-700 dark:text-amber-400" : "text-primary"}`} />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">{t.label}</p>
+                <p className="text-xl font-bold text-card-foreground">{t.value}</p>
+                <p className="text-[11px] text-muted-foreground">{t.sub}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
 
       {/* Charts row */}

@@ -13,9 +13,11 @@ class DeliveryController
         $page  = max(1, (int)$request->query('page', 1));
         $limit = min(200, max(1, (int)$request->query('limit', 50)));
         $filters = [
-            'status'   => $request->query('status'),
-            'category' => $request->query('category'),
-            'search'   => $request->query('search'),
+            'status'        => $request->query('status'),
+            'category'      => $request->query('category'),
+            'search'        => $request->query('search'),
+            'customer_id'   => $request->query('customer_id'),
+            'customer_name' => $request->query('customer_name'),
         ];
         $result = DeliveryNote::all($filters, $page, $limit);
         $rows = array_map(fn($r) => $this->gateTax($request, $r), $result['rows']);

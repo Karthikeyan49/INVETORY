@@ -44,6 +44,12 @@ export default function MachineMovementsLog() {
   }
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  // Real-time search — debounced so we don't fire a request on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => load(), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   return (
     <div className="p-6 space-y-6">
@@ -55,7 +61,7 @@ export default function MachineMovementsLog() {
       <div className="relative w-72">
         <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
         <Input className="pl-8" placeholder="Search machine / activity…" value={search}
-          onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
+          onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       <div className="border rounded-lg overflow-x-auto">

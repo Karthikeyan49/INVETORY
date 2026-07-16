@@ -97,6 +97,15 @@ export async function createManualOrder(input: CreateManualOrderInput): Promise<
   return res.data;
 }
 
+/** Create an order from an existing Invoice or Delivery Challan (machine-based, no products). */
+export async function createOrderFromDocument(sourceType: "invoice" | "challan", sourceId: number): Promise<ApiOrder> {
+  const res = await apiFetch<{ data: ApiOrder }>("/admin/orders/from-document", {
+    method: "POST",
+    body: JSON.stringify({ source_type: sourceType, source_id: sourceId }),
+  });
+  return res.data;
+}
+
 // ── Fetch single order with full items ────────────────────────────────────
 
 export async function fetchOrder(id: number): Promise<ApiOrder> {

@@ -686,32 +686,10 @@ export function workingDaysInMonth(month: string): number {
   return count;
 }
 
-export interface PayrollFlag {
-  employee_key: string;
-  employee_name: string | null;
-  severity: "high" | "medium" | "low";
-  issue: string;
-  detail: string;
-}
-export interface PayrollAiCheck {
-  month: string;
-  checked: number;
-  overall: string;
-  flags: PayrollFlag[];
-  flagged: number;
-  high: number;
-  generated_at: string;
-}
-
 export const payrollApi = {
   async get(month: string): Promise<Payslip[]> {
     if (MOCK_MODE) { await mockDelay(); return []; }
     return (await apiFetch<{data: Payslip[]}>(`/admin/payroll?month=${month}`)).data ?? [];
-  },
-  async aiCheck(month: string): Promise<PayrollAiCheck> {
-    return (await apiFetch<{ data: PayrollAiCheck }>("/admin/payroll/ai-check", {
-      method: "POST", body: JSON.stringify({ month }),
-    })).data;
   },
   async run(
     month: string,

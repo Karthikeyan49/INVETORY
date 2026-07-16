@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, Wrench, AlertTriangle, Truck, ArrowRightLeft, Pencil, Receipt, CheckCircle2, History, FileText } from "lucide-react";
+import { Plus, Search, Wrench, AlertTriangle, Truck, ArrowRightLeft, Pencil, Receipt, ReceiptText, CheckCircle2, History, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
@@ -245,10 +245,13 @@ export default function Machines() {
       extra_amount: num(form.extra_amount), extra_from_vendor: num(form.extra_from_vendor),
     };
     try {
+      let createdMachineId: number | undefined;
       if (editingId) { await updateMachine(editingId, payload); toast.success("Machine updated"); }
-      else { await createMachine(payload); toast.success("Machine created"); }
+      else { const created = await createMachine(payload); createdMachineId = created?.id; toast.success("Machine created"); }
       // Best-effort: also record this as a vendor purchase (Purchases page) so
       // "how much was paid for it" is tracked — only when a vendor was named.
+      // machine_id links the purchase back to the machine (real FK) so a later
+      // buy-price edit syncs to this purchase automatically.
       if (!editingId && form.vendor_name.trim()) {
         const vn = form.vendor_name.trim();
         // Create the vendor in the master too, when it's a name we haven't seen.
@@ -257,6 +260,7 @@ export default function Machines() {
         }
         createPurchase({
           vendor_name: vn,
+          machine_id: createdMachineId,
           purchase_type: form.purchase_mode === "cash" ? "cash" : "credit",
           taxable: num(form.buy_price) ?? 0,
           gst_pct: num(form.buy_gst_pct) ?? 0,
@@ -337,6 +341,16 @@ export default function Machines() {
     } catch (e) { toast.error(e instanceof Error ? e.message : "Could not update part"); }
   }
 
+  // Which machine did this (now-missing) part get moved to? Read from the
+  // transfer audit trail so the parts dialog can show the destination, not just "missing".
+  function movedToCode(partName: string): string | null {
+    if (!detail) return null;
+    const t = (detail.transfers ?? []).find(
+      (x) => x.from_machine_id === detail.id && x.part_name === partName,
+    );
+    return t?.to_code ?? null;
+  }
+
   // Report an issue from the Machines page — it shows up on the Machine Issues page.
   function openIssue(m: Machine) { setIssueForm({ title: "", process: "Reported" }); setIssueFor(m); }
   async function submitIssue() {
@@ -368,6 +382,16 @@ export default function Machines() {
       amount: m.sale_price ?? "", gst_pct: m.sale_gst_pct ?? 18,
       items: `${m.model ?? ""} (${m.code})`.trim(),
       extra_amount: m.extra_amount ?? "", extra_from_vendor: m.extra_from_vendor ?? "",
+    } } });
+  }
+  // Go to the Cash Bills page with the machine details prefilled in its create form.
+  function openCashBill(m: Machine) {
+    const desc = [`ELECTRONIC WEIGHING SCALE`, m.model ? `Model ${m.model}` : "", m.code ? `Machine No ${m.code}` : ""]
+      .filter(Boolean).join(" — ");
+    navigate("/cash-bills", { state: { machineCashBill: {
+      machine_id: m.id,
+      description: desc,
+      amount: m.sale_price ?? "",
     } } });
   }
   // Go to the Invoices page with a line item prefilled from the machine.
@@ -662,7 +686,10 @@ export default function Machines() {
 
           {detail?.missing_parts && detail.missing_parts.length > 0 && (
             <div className="flex items-center gap-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-red-700 text-xs">
-              <AlertTriangle className="h-4 w-4" /> Incomplete: {detail.missing_parts.map((p) => p.part_name).join(", ")} missing — block invoice/delivery until resolved.
+              <AlertTriangle className="h-4 w-4" /> Incomplete: {detail.missing_parts.map((p) => {
+                const dest = movedToCode(p.part_name);
+                return dest ? `${p.part_name} (moved to ${dest})` : p.part_name;
+              }).join(", ")} missing — block invoice/delivery until resolved.
             </div>
           )}
 
@@ -681,7 +708,11 @@ export default function Machines() {
               </div>
             ) : (
               <div key={p.id} className="flex items-center justify-between border rounded px-3 py-2">
-                <span>{p.part_name} <span className="text-muted-foreground">×{p.qty}</span></span>
+                <span>{p.part_name} <span className="text-muted-foreground">×{p.qty}</span>
+                  {p.status === "missing" && movedToCode(p.part_name) && (
+                    <span className="text-xs text-amber-700 ml-2">→ moved to {movedToCode(p.part_name)}</span>
+                  )}
+                </span>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs px-2 py-0.5 rounded ${p.status === "missing" ? "bg-red-100 text-red-700" : p.status === "transferred" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>{p.status}</span>
                   {p.status !== "present" && (
@@ -724,9 +755,12 @@ export default function Machines() {
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>Convert {convertFor?.code}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">What would you like to create from this machine?</p>
-          <div className="grid grid-cols-2 gap-2 pt-2">
+          <div className="grid grid-cols-3 gap-2 pt-2">
             <Button variant="outline" className="h-16 flex-col gap-1" onClick={() => { const m = convertFor!; setConvertFor(null); openChallan(m); }}>
               <Truck className="h-5 w-5" /> Delivery Challan
+            </Button>
+            <Button variant="outline" className="h-16 flex-col gap-1" onClick={() => { const m = convertFor!; setConvertFor(null); openCashBill(m); }}>
+              <ReceiptText className="h-5 w-5" /> Cash Bill
             </Button>
             <Button className="h-16 flex-col gap-1" onClick={() => { const m = convertFor!; setConvertFor(null); openInvoice(m); }}>
               <Receipt className="h-5 w-5" /> Invoice

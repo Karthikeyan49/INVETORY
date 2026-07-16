@@ -32,12 +32,10 @@ set_exception_handler(function (Throwable $e) {
 
 // --- CORS ---------------------------------------------------------------------
 $_allowedOrigins = array_filter(array_map('trim', explode(',', defined('CORS_ORIGIN') ? CORS_ORIGIN : '')));
-$_allowedOrigins[] = 'https://dealer.inventory.com';   // standalone Dealer Portal site
 // Local dev origins are only trusted outside production.
 if (!defined('APP_ENV') || APP_ENV !== 'production') {
     $_allowedOrigins[] = 'http://localhost:8080';
     $_allowedOrigins[] = 'http://localhost:8081';
-    $_allowedOrigins[] = 'http://localhost:8082';      // dealer dev preview
 }
 $_requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
 $_corsHeader = in_array($_requestOrigin, $_allowedOrigins, true) ? $_requestOrigin : ($_allowedOrigins[0] ?? 'https://api.inventory.com');
@@ -112,16 +110,11 @@ require_once ROOT_PATH . '/models/AttendanceAnalytics.php';
 require_once ROOT_PATH . '/models/Payroll.php';
 require_once ROOT_PATH . '/models/Incentive.php';
 require_once ROOT_PATH . '/models/EmployeeAdvance.php';
-require_once ROOT_PATH . '/models/Task.php';
-require_once ROOT_PATH . '/models/Meeting.php';
 require_once ROOT_PATH . '/models/EmployeeCompliance.php';
 require_once ROOT_PATH . '/models/HrImport.php';
-require_once ROOT_PATH . '/models/MeetingMedia.php';
 require_once ROOT_PATH . '/models/DataImportMapper.php';
 require_once ROOT_PATH . '/models/DataExportService.php';
 require_once ROOT_PATH . '/models/BackupService.php';
-require_once ROOT_PATH . '/models/Sop.php';
-require_once ROOT_PATH . '/models/Workflow.php';
 require_once ROOT_PATH . '/models/Insights.php';
 require_once ROOT_PATH . '/models/Vendor.php';
 require_once ROOT_PATH . '/models/PurchaseRequest.php';
@@ -151,6 +144,7 @@ require_once ROOT_PATH . '/models/Stamping.php';
 require_once ROOT_PATH . '/models/Followup.php';
 require_once ROOT_PATH . '/models/Dcr.php';
 require_once ROOT_PATH . '/models/DeliveryNote.php';
+require_once ROOT_PATH . '/models/CashBill.php';
 require_once ROOT_PATH . '/helpers/GroqAPI.php';
 require_once ROOT_PATH . '/controllers/AuthController.php';
 require_once ROOT_PATH . '/controllers/UserController.php';
@@ -158,8 +152,6 @@ require_once ROOT_PATH . '/controllers/ProductController.php';
 require_once ROOT_PATH . '/controllers/OrderController.php';
 require_once ROOT_PATH . '/controllers/StatisticsController.php';
 require_once ROOT_PATH . '/controllers/QueryController.php';
-require_once ROOT_PATH . '/controllers/QuoteController.php';
-require_once ROOT_PATH . '/controllers/DealerWorkspaceController.php';
 require_once ROOT_PATH . '/controllers/MachineController.php';
 require_once ROOT_PATH . '/controllers/MachineIssueController.php';
 require_once ROOT_PATH . '/controllers/InventoryItemController.php';
@@ -169,6 +161,7 @@ require_once ROOT_PATH . '/controllers/FundingController.php';
 require_once ROOT_PATH . '/controllers/StampingController.php';
 require_once ROOT_PATH . '/controllers/FollowupController.php';
 require_once ROOT_PATH . '/controllers/DeliveryController.php';
+require_once ROOT_PATH . '/controllers/CashBillController.php';
 
 // Admin
 require_once ROOT_PATH . '/middleware/AdminMiddleware.php';
@@ -177,24 +170,18 @@ require_once ROOT_PATH . '/controllers/admin/AdminProductController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminInvoiceController.php';
 require_once ROOT_PATH . '/controllers/admin/HistoricalInvoiceController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminInvoiceProductController.php';
-require_once ROOT_PATH . '/controllers/admin/AdminQuoteController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminQueryController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminSettingsController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminPricingController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminExpenseController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminFinanceController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminReportsController.php';
-require_once ROOT_PATH . '/controllers/admin/AdminTaskController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminEmployeeController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminAttendanceController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminPayrollController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminIncentiveController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminDcrController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminEmployeeAdvanceController.php';
-require_once ROOT_PATH . '/controllers/admin/AdminFaqController.php';
-require_once ROOT_PATH . '/controllers/admin/AdminMeetingController.php';
-require_once ROOT_PATH . '/controllers/admin/AdminWorkflowController.php';
-require_once ROOT_PATH . '/controllers/admin/AdminSopController.php';
 require_once ROOT_PATH . '/helpers/GroqClient.php';
 require_once ROOT_PATH . '/helpers/DataBridge.php';
 require_once ROOT_PATH . '/controllers/ChatController.php';
@@ -230,7 +217,6 @@ require_once ROOT_PATH . '/controllers/admin/AdminFinancePlanningController.php'
 require_once ROOT_PATH . '/controllers/admin/AdminComplianceController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminAttendanceAnalyticsController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminHrImportController.php';
-require_once ROOT_PATH . '/controllers/admin/AdminMeetingMediaController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminDataInteropController.php';
 
 // --- Routes -------------------------------------------------------------------
@@ -290,6 +276,7 @@ $router->post('/stampings',              [StampingController::class, 'store'],  
 $router->put('/stampings/{id}/renew',    [StampingController::class, 'renew'],        'admin');
 $router->put('/stampings/{id}/status',   [StampingController::class, 'updateStatus'], 'admin');
 $router->put('/stampings/{id}/fee',      [StampingController::class, 'updateFee'],    'admin:owner,accountant'); // fee = money
+$router->put('/stampings/{id}',          [StampingController::class, 'update'],       'admin'); // cert/date/notes (non-money)
 
 // Machine Issues — service / fault tracking — staff-only
 $router->get('/machine-issues',              [MachineIssueController::class, 'index'],   'admin');
@@ -332,6 +319,12 @@ $router->post('/deliveries',             [DeliveryController::class, 'store'],  
 $router->get('/deliveries/{id}',         [DeliveryController::class, 'show'],         'admin');
 $router->put('/deliveries/{id}/status',  [DeliveryController::class, 'updateStatus'], 'admin');
 
+// Cash bills (Sri Vari Cash Bill F/SVS/34) — static routes before {id}
+$router->get('/cash-bills',              [CashBillController::class, 'index'],        'admin');
+$router->post('/cash-bills',             [CashBillController::class, 'store'],        'admin');
+$router->get('/cash-bills/{id}',         [CashBillController::class, 'show'],         'admin');
+$router->delete('/cash-bills/{id}',      [CashBillController::class, 'destroy'],      'admin');
+
 // Follow-ups (requirement.txt — Module 6) — staff-only
 $router->get('/followups',               [FollowupController::class, 'index'],        'admin');
 $router->get('/followups/due',           [FollowupController::class, 'due'],          'admin');
@@ -348,6 +341,7 @@ $router->put('/orders/{id}/payment-status', [OrderController::class, 'updatePaym
 $router->put('/orders/{id}/refund-status',  [OrderController::class, 'updateRefundStatus'],  'admin:owner,accountant');
 
 // Admin manual order entry (staff enter walk-in orders by hand — no customer app)
+$router->post('/admin/orders/from-document', [OrderController::class, 'storeFromDocument'], 'admin'); // order from invoice/challan
 $router->post('/admin/orders',   [OrderController::class, 'storeManual'], 'admin');
 
 // Statistics — staff-only (aggregate revenue/sales/customer metrics)
@@ -355,24 +349,13 @@ $router->get('/statistics/orders',        [StatisticsController::class, 'orders'
 $router->get('/statistics/active-orders', [StatisticsController::class, 'activeOrders'], 'admin');
 $router->get('/statistics/overview',      [StatisticsController::class, 'overview'],     'admin');
 $router->get('/statistics/employees',     [StatisticsController::class, 'employees'],    'admin');
-$router->get('/statistics/tasks',         [StatisticsController::class, 'tasks'],        'admin');
 $router->get('/statistics/sales',         [StatisticsController::class, 'sales'],        'admin');
 $router->get('/statistics/revenue',       [StatisticsController::class, 'revenue'],      'admin');
 $router->get('/statistics/customers',     [StatisticsController::class, 'customers'],    'admin');
 
-// Public Queries & Quotes
+// Public Queries
 $router->post('/queries', [QueryController::class, 'store']); // Auth optional (handled if token sent? Actually without AuthMiddleware user is null but that's fine for guests)
 
-$router->post('/quotes',  [QuoteController::class, 'store'], true); // Auth REQUIRED for quotes
-
-// Dealer Workspace (role-scoped)
-$router->get('/dealer/profile',       [DealerWorkspaceController::class, 'profile'],       'dealer');
-$router->get('/dealer/dashboard',     [DealerWorkspaceController::class, 'dashboard'],     'dealer');
-$router->get('/dealer/customers',     [DealerWorkspaceController::class, 'customers'],     'dealer');
-$router->post('/dealer/customers',    [DealerWorkspaceController::class, 'storeCustomer'], 'dealer');
-$router->put('/dealer/customers/{id}',[DealerWorkspaceController::class, 'updateCustomer'],'dealer');
-$router->get('/dealer/price-list',    [DealerWorkspaceController::class, 'priceList'],     'dealer');
-$router->post('/dealer/orders',       [DealerWorkspaceController::class, 'storeOrder'],    'dealer');
 
 // --- Admin Routes (auth = 'admin' -> AuthMiddleware + AdminMiddleware) ---------
 
@@ -389,22 +372,11 @@ $router->post('/admin/users/find-or-create',[AdminUserController::class,    'fin
 $router->put('/admin/users/{id}',           [AdminUserController::class,    'update'],       'admin:owner'); // can set staff_role → owner-only
 $router->delete('/admin/users/{id}',        [AdminUserController::class,    'destroy'],      'admin:owner');
 
-// Admin Dealer Network and Customer Intelligence
-$router->get('/admin/dealers',                       [AdminDealerController::class, 'index'],                 'admin:owner,sales,accountant');
-$router->get('/admin/dealers/{id}',                   [AdminDealerController::class, 'show'],                  'admin:owner,sales,accountant');
-$router->get('/admin/dealer-price-lists',             [AdminDealerController::class, 'priceLists'],            'admin:owner,sales');
-$router->post('/admin/dealer-price-lists',            [AdminDealerController::class, 'createPriceList'],       'admin:owner,sales');
-$router->put('/admin/dealer-price-lists/{id}/items',  [AdminDealerController::class, 'updatePriceItems'],      'admin:owner,sales');
-$router->get('/admin/dealer-price-lists/{id}',        [AdminDealerController::class, 'showPriceList'],         'admin:owner,sales,accountant');
-$router->put('/admin/dealer-price-lists/{id}',        [AdminDealerController::class, 'updatePriceList'],       'admin:owner,sales');
-$router->get('/admin/dealer-customers/conflicts',     [AdminDealerController::class, 'conflicts'],             'admin:owner,sales');
-$router->get('/admin/dealer-customers',               [AdminDealerController::class, 'dealerCustomers'],       'admin:owner,sales,accountant');
-$router->post('/admin/dealer-customers/{id}/resolve', [AdminDealerController::class, 'resolveDealerCustomer'], 'admin:owner,sales');
+// Customer Intelligence (dealer-network routes removed)
 $router->post('/admin/customers/merge',               [AdminDealerController::class, 'mergeCustomers'],        'admin:owner');
 $router->get('/admin/customers/analytics/summary',    [AdminDealerController::class, 'analyticsSummary'],      'admin:owner,accountant,sales');
 $router->post('/admin/customer-metrics/recompute',    [AdminDealerController::class, 'recomputeMetrics'],      'admin:owner,accountant');
 $router->get('/admin/customers/{id}/analytics',       [AdminDealerController::class, 'customerAnalytics'],     'admin:owner,accountant,sales');
-$router->get('/admin/dealer-price-simulation',        [AdminDealerController::class, 'priceSimulation'],       'admin:owner,sales,accountant');
 
 // Admin Products
 $router->post('/admin/products',             [AdminProductController::class,  'store'],   'admin');
@@ -647,7 +619,6 @@ $router->delete('/admin/expenses/{id}',        [AdminExpenseController::class, '
 
 // Admin Finance (Profit & Loss, Ratios, Config)
 $router->get('/admin/finance/overlay',          [AdminFinancePlanningController::class, 'overlay'],       'admin:owner,accountant');
-$router->post('/admin/finance/ai-analysis',    [AdminFinanceController::class, 'aiAnalysis'],   'admin:owner,accountant');
 $router->get('/admin/finance/pnl',             [AdminFinanceController::class, 'pnl'],          'admin');
 $router->get('/admin/finance/statements',      [AdminFinanceController::class, 'statements'],   'admin');
 $router->get('/funding',                        [FundingController::class, 'index'],   'admin');
@@ -687,10 +658,6 @@ $router->get('/admin/reports/inventory/dealer-consumption', [AdminReportsControl
 $router->get('/admin/reports/inventory/zone-analysis',      [AdminReportsController::class, 'inventoryZoneAnalysis'],     'admin:owner,store_keeper,accountant');
 
 // Admin Quote Requests
-$router->post('/admin/quote-requests',      [AdminQuoteController::class,    'store'],        'admin');
-$router->get('/admin/quote-requests',       [AdminQuoteController::class,    'index'],        'admin');
-$router->get('/admin/quote-requests/{id}',  [AdminQuoteController::class,    'show'],         'admin');
-$router->put('/admin/quote-requests/{id}',  [AdminQuoteController::class,    'update'],       'admin');
 
 // Admin Queries
 $router->get('/admin/queries',              [AdminQueryController::class,    'index'],        'admin');
@@ -698,11 +665,6 @@ $router->get('/admin/queries/{id}',         [AdminQueryController::class,    'sh
 $router->put('/admin/queries/{id}/reply',   [AdminQueryController::class,    'reply'],        'admin');
 
 // Admin FAQs (reorder must be before /{id} to avoid route collision)
-$router->get('/admin/faqs',                 [AdminFaqController::class, 'index'],   'admin');
-$router->post('/admin/faqs',                [AdminFaqController::class, 'store'],   'admin');
-$router->put('/admin/faqs/reorder',         [AdminFaqController::class, 'reorder'], 'admin');
-$router->put('/admin/faqs/{id}',            [AdminFaqController::class, 'update'],  'admin');
-$router->delete('/admin/faqs/{id}',         [AdminFaqController::class, 'destroy'], 'admin');
 
 // Admin Settings
 $router->get('/admin/settings',             [AdminSettingsController::class, 'show'],         'admin');
@@ -737,23 +699,6 @@ $router->post('/admin/backup/run',                    [AdminDataInteropControlle
 
 // Admin Insights (AI-powered)
 $router->post('/admin/insights/generate',   [AdminInsightsController::class, 'generate'],     'admin');
-
-// ─── Admin Tasks ─────────────────────────────────────────────────────────────
-// NOTE: static paths (/performance, /statistics, /employee/{id}) MUST be registered
-// BEFORE the dynamic /admin/tasks/{id} — router matches in registration order.
-$router->get('/admin/tasks',                          [AdminTaskController::class, 'index'],        'admin');
-$router->get('/admin/tasks/performance',              [AdminTaskController::class, 'performance'],  'admin');
-$router->get('/admin/tasks/statistics',               [AdminTaskController::class, 'statistics'],   'admin');
-$router->get('/admin/tasks/employee/{id}',            [AdminTaskController::class, 'byEmployee'],   'admin');
-$router->get('/admin/tasks/{id}',                     [AdminTaskController::class, 'show'],         'admin');
-$router->post('/admin/tasks',                         [AdminTaskController::class, 'store'],        'admin');
-$router->post('/admin/tasks/{id}/comment',            [AdminTaskController::class, 'addComment'],   'admin');
-$router->put('/admin/tasks/{id}/status',              [AdminTaskController::class, 'updateStatus'], 'admin');
-$router->put('/admin/tasks/{id}/assign',              [AdminTaskController::class, 'assign'],       'admin');
-$router->put('/admin/tasks/{id}/priority',            [AdminTaskController::class, 'updatePriority'],'admin');
-$router->put('/admin/tasks/{id}',                     [AdminTaskController::class, 'update'],       'admin');
-$router->patch('/admin/tasks/{id}',                   [AdminTaskController::class, 'update'],       'admin');
-$router->delete('/admin/tasks/{id}',                  [AdminTaskController::class, 'destroy'],      'admin');
 
 // ─── Admin Employees ─────────────────────────────────────────────────────────
 $router->get('/admin/employees',                      [AdminEmployeeController::class, 'index'],        'admin');
@@ -800,7 +745,6 @@ $router->get('/admin/payroll',                        [AdminPayrollController::c
 $router->get('/admin/payroll/report',                 [AdminPayrollController::class, 'report'],   'admin');
 $router->get('/admin/payroll/{id}/history',           [AdminPayrollController::class, 'history'],  'admin');
 $router->get('/admin/payroll/{id}',                   [AdminPayrollController::class, 'show'],     'admin');
-$router->post('/admin/payroll/ai-check',              [AdminPayrollController::class, 'aiCheck'],  'admin:owner,accountant,hr');
 $router->post('/admin/payroll/run',                   [AdminPayrollController::class, 'run'],      'admin:owner,accountant,hr');
 $router->post('/admin/payroll/calculate',             [AdminPayrollController::class, 'calculate'],'admin:owner,accountant,hr');
 $router->post('/admin/payroll/process',               [AdminPayrollController::class, 'process'],  'admin:owner,accountant,hr');
@@ -816,6 +760,7 @@ $router->delete('/admin/incentives/{id}',             [AdminIncentiveController:
 // ─── Admin Daily Call Report (R13 / T11) — field visits → leads
 $router->get('/admin/dcr',                            [AdminDcrController::class, 'index'],    'admin');
 $router->post('/admin/dcr',                           [AdminDcrController::class, 'store'],    'admin:owner,accountant,hr,sales');
+$router->post('/admin/dcr/extract',                   [AdminDcrController::class, 'extract'],  'admin:owner,accountant,hr,sales');
 $router->get('/admin/dcr/{id}',                       [AdminDcrController::class, 'show'],     'admin');
 $router->put('/admin/dcr/{id}',                       [AdminDcrController::class, 'update'],   'admin:owner,accountant,hr,sales');
 $router->post('/admin/dcr/{id}/approve',              [AdminDcrController::class, 'approve'],  'admin:owner,accountant,hr');
@@ -828,17 +773,6 @@ $router->put('/admin/employee-advances/{id}',         [AdminEmployeeAdvanceContr
 $router->delete('/admin/employee-advances/{id}',      [AdminEmployeeAdvanceController::class, 'destroy'], 'admin:owner,accountant,hr');
 
 // ─── Admin Meetings ──────────────────────────────────────────────────────────
-$router->get('/admin/meetings',                [AdminMeetingController::class, 'index'],            'admin');
-$router->get('/admin/meetings/upcoming',       [AdminMeetingController::class, 'upcoming'],         'admin');
-$router->get('/admin/meetings/general',        [AdminMeetingController::class, 'general'],          'admin');
-$router->get('/admin/meetings/{id}/media',     [AdminMeetingMediaController::class, 'index'],       'admin:owner,hr');
-$router->post('/admin/meetings/{id}/media',    [AdminMeetingMediaController::class, 'store'],       'admin:owner,hr');
-$router->delete('/admin/meetings/{id}/media/{attachmentId}', [AdminMeetingMediaController::class, 'destroy'], 'admin:owner,hr');
-$router->get('/admin/meetings/{id}',           [AdminMeetingController::class, 'show'],             'admin');
-$router->post('/admin/meetings',               [AdminMeetingController::class, 'store'],            'admin');
-$router->put('/admin/meetings/{id}',           [AdminMeetingController::class, 'update'],           'admin');
-$router->delete('/admin/meetings/{id}',        [AdminMeetingController::class, 'destroy'],          'admin');
-$router->put('/admin/meetings/{id}/attendees', [AdminMeetingController::class, 'updateAttendees'],  'admin');
 
 // ─── Admin HR Compliance ─────────────────────────────────────────────────────
 $router->get('/admin/compliance/expiring',      [AdminComplianceController::class, 'expiring'],      'admin:owner,hr');
@@ -848,23 +782,8 @@ $router->put('/admin/compliance/{id}',          [AdminComplianceController::clas
 $router->delete('/admin/compliance/{id}',       [AdminComplianceController::class, 'destroy'],       'admin:owner,hr');
 
 // ─── Admin SOPs ───────────────────────────────────────────────────────────────
-$router->get('/admin/sops',                    [AdminSopController::class, 'index'],                'admin');
-$router->get('/admin/sops/categories',         [AdminSopController::class, 'categories'],           'admin');
-$router->get('/admin/sops/{id}',               [AdminSopController::class, 'show'],                 'admin');
-$router->post('/admin/sops',                   [AdminSopController::class, 'store'],                'admin');
-$router->post('/admin/sops/{id}/versions',     [AdminSopController::class, 'uploadVersion'],        'admin');
-$router->put('/admin/sops/{id}/versions/{versionId}/status', [AdminSopController::class, 'updateVersionStatus'], 'admin');
-$router->get('/admin/sops/{id}/versions/{versionId}/download', [AdminSopController::class, 'downloadVersion'], 'admin');
-$router->put('/admin/sops/{id}',               [AdminSopController::class, 'update'],               'admin');
-$router->delete('/admin/sops/{id}',            [AdminSopController::class, 'destroy'],              'admin');
-$router->post('/admin/sops/{id}/publish',      [AdminSopController::class, 'publish'],              'admin');
 
 // ─── Admin Workflows ─────────────────────────────────────────────────────────
-$router->get('/admin/workflows',                  [AdminWorkflowController::class, 'index'],      'admin');
-$router->get('/admin/workflows/{id}',             [AdminWorkflowController::class, 'show'],       'admin');
-$router->post('/admin/workflows',                 [AdminWorkflowController::class, 'store'],      'admin');
-$router->post('/admin/workflows/{id}/transition', [AdminWorkflowController::class, 'transition'], 'admin');
-$router->delete('/admin/workflows/{id}',          [AdminWorkflowController::class, 'destroy'],    'admin');
 
 // ─── Chat (staff assistant over business data — must be authenticated) ────────
 $router->post('/chat',              [ChatController::class, 'send'],    'admin');
@@ -874,24 +793,29 @@ $router->get('/admin/chat/sessions',[ChatController::class, 'sessions'], 'admin'
 
 // --- Rate limiting (before dispatch) ------------------------------------------
 // Strict per-IP buckets on the brute-force surface (login / register / OTP /
-// password reset), plus a general per-IP limiter on everything else. OPTIONS
-// preflights already exited above, so they are never counted.
-$_rlMethod = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
-$_rlPath   = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
-$_rlPath   = preg_replace('#^/api#', '', $_rlPath) ?? $_rlPath;
-$_rlPath   = rtrim($_rlPath, '/') ?: '/';
+// password reset), plus a general per-IP limiter on everything else.
+// DISABLED per operational decision (2026-07-16): kept in the codebase but not
+// invoked, so no per-IP throttling is active. Flip $_RATE_LIMIT_ENABLED to true
+// when doing a deliberate security-hardening release.
+$_RATE_LIMIT_ENABLED = false;
+if ($_RATE_LIMIT_ENABLED) {
+    $_rlMethod = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+    $_rlPath   = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
+    $_rlPath   = preg_replace('#^/api#', '', $_rlPath) ?? $_rlPath;
+    $_rlPath   = rtrim($_rlPath, '/') ?: '/';
 
-if ($_rlMethod === 'POST') {
-    if ($_rlPath === '/auth/login') {
-        RateLimitMiddleware::loginLimit();
-    } elseif ($_rlPath === '/auth/register') {
-        RateLimitMiddleware::registerLimit();
-    } elseif (in_array($_rlPath, ['/auth/forgot-password', '/auth/send-otp', '/auth/verify-otp', '/auth/reset-password'], true)) {
-        RateLimitMiddleware::otpLimit();
+    if ($_rlMethod === 'POST') {
+        if ($_rlPath === '/auth/login') {
+            RateLimitMiddleware::loginLimit();
+        } elseif ($_rlPath === '/auth/register') {
+            RateLimitMiddleware::registerLimit();
+        } elseif (in_array($_rlPath, ['/auth/forgot-password', '/auth/send-otp', '/auth/verify-otp', '/auth/reset-password'], true)) {
+            RateLimitMiddleware::otpLimit();
+        }
     }
+    RateLimitMiddleware::handle(); // general per-IP limiter
+    unset($_rlMethod, $_rlPath);
 }
-RateLimitMiddleware::handle(); // general per-IP limiter
-unset($_rlMethod, $_rlPath);
 
 // Dispatch
 $router->dispatch();

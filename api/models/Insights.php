@@ -327,108 +327,16 @@ class Insights
      */
     public static function getProductionData(): array
     {
-        // SOP status distribution with details
-        $sopStatus = Database::fetchAll(
-            "SELECT sv.status, s.department,
-                    COUNT(*) as count,
-                    GROUP_CONCAT(s.title SEPARATOR '; ') as sop_titles
-             FROM sops s
-             JOIN sop_versions sv ON s.current_version_id = sv.version_id
-             GROUP BY sv.status, s.department"
-        );
-        
-        // Workflow analysis by type and stage
-        $workflowAnalysis = Database::fetchAll(
-            "SELECT type, stage, priority,
-                    COUNT(*) as count,
-                    AVG(DATEDIFF(NOW(), created_at)) as avg_age_days,
-                    SUM(amount) as total_amount
-             FROM workflows
-             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
-             GROUP BY type, stage, priority
-             ORDER BY count DESC"
-        );
-        
-        // Workflow bottlenecks with requester info
-        $workflowBottlenecks = Database::fetchAll(
-            "SELECT w.title, w.type, w.stage, w.priority,
-                    DATEDIFF(NOW(), w.created_at) as days_pending,
-                    w.amount,
-                    w.due_date,
-                    u1.name as requester_name,
-                    u2.name as approver_name
-             FROM workflows w
-             LEFT JOIN users u1 ON w.requester_id = u1.user_id
-             LEFT JOIN users u2 ON w.approver_id = u2.user_id
-             WHERE w.stage = 'Pending' 
-             AND DATEDIFF(NOW(), w.created_at) > 7
-             ORDER BY days_pending DESC
-             LIMIT 10"
-        );
-        
-        // Task completion stats by assignee
-        $taskStats = Database::fetchAll(
-            "SELECT status, priority,
-                    COUNT(*) as count,
-                    AVG(CASE WHEN completed_at IS NOT NULL 
-                        THEN DATEDIFF(completed_at, created_at) 
-                        ELSE NULL END) as avg_completion_days,
-                    SUM(CASE WHEN due_date < NOW() AND status != 'Completed' THEN 1 ELSE 0 END) as overdue_count
-             FROM tasks 
-             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-             GROUP BY status, priority
-             ORDER BY count DESC"
-        );
-        
-        // Task assignee performance
-        $taskAssigneePerformance = Database::fetchAll(
-            "SELECT assignee_id,
-                    COUNT(*) as total_tasks,
-                    SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) as completed_tasks,
-                    SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) as in_progress_tasks,
-                    SUM(CASE WHEN due_date < NOW() AND status != 'Completed' THEN 1 ELSE 0 END) as overdue_tasks,
-                    AVG(CASE WHEN completed_at IS NOT NULL 
-                        THEN DATEDIFF(completed_at, created_at) 
-                        ELSE NULL END) as avg_completion_days
-             FROM tasks
-             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-             GROUP BY assignee_id
-             ORDER BY completed_tasks DESC"
-        );
-        
-        // Meeting frequency and attendance
-        $meetingStats = Database::fetch(
-            "SELECT 
-                COUNT(*) as total_meetings,
-                AVG(JSON_LENGTH(attendees)) as avg_attendees,
-                COUNT(DISTINCT DATE(date)) as meeting_days
-             FROM meetings 
-             WHERE date >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
-        );
-        
-        // Recent meetings
-        $recentMeetings = Database::fetchAll(
-            "SELECT title, date, time, location,
-                    JSON_LENGTH(attendees) as attendee_count,
-                    JSON_LENGTH(action_items) as action_item_count
-             FROM meetings
-             WHERE date >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-             ORDER BY date DESC
-             LIMIT 10"
-        );
-        
-        // Summary
-        $summary = [
-            'sop_status' => $sopStatus,
-            'workflow_analysis' => $workflowAnalysis,
-            'workflow_bottlenecks' => $workflowBottlenecks,
-            'task_stats' => $taskStats,
-            'task_assignee_performance' => $taskAssigneePerformance,
-            'meeting_stats' => $meetingStats,
-            'recent_meetings' => $recentMeetings,
+        // Production ops modules (SOPs, workflows, tasks, meetings) were removed.
+        return [
+            'sop_status' => [],
+            'workflow_analysis' => [],
+            'workflow_bottlenecks' => [],
+            'task_stats' => [],
+            'task_assignee_performance' => [],
+            'meeting_stats' => null,
+            'recent_meetings' => [],
         ];
-        
-        return $summary;
     }
     
     /**

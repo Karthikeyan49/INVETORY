@@ -239,16 +239,8 @@ class AdminEmployeeController
             [$key]
         );
 
-        // Tasks summary
-        $taskStats = Database::fetch(
-            "SELECT COUNT(*) AS total,
-                    SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed,
-                    SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) AS in_progress,
-                    SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END) AS pending,
-                    SUM(CASE WHEN due_date < CURDATE() AND status != 'Completed' THEN 1 ELSE 0 END) AS overdue
-             FROM tasks WHERE assignee_id = ?",
-            [$key]
-        );
+        // Tasks module removed
+        $taskStats = [];
 
         Response::success([
             'employee'   => Employee::format($emp),

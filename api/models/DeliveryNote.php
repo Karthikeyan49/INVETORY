@@ -39,6 +39,24 @@ class DeliveryNote
             $params[] = '%' . $filters['search'] . '%';
             $params[] = '%' . $filters['search'] . '%';
         }
+        // Customer scoping (Customers history tab): prefer the real customer_id so
+        // two same-named customers don't cross-leak; fall back to the name for
+        // legacy challans that were never linked to a customer id.
+        $custId   = !empty($filters['customer_id']) ? (int)$filters['customer_id'] : 0;
+        $custName = isset($filters['customer_name']) ? trim((string)$filters['customer_name']) : '';
+        if ($custId > 0) {
+            if ($custName !== '') {
+                $where[]  = '(d.customer_id = ? OR (d.customer_id IS NULL AND LOWER(d.customer_name) = LOWER(?)))';
+                $params[] = $custId;
+                $params[] = $custName;
+            } else {
+                $where[]  = 'd.customer_id = ?';
+                $params[] = $custId;
+            }
+        } elseif ($custName !== '') {
+            $where[]  = 'LOWER(d.customer_name) = LOWER(?)';
+            $params[] = $custName;
+        }
         $clause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
         $total = Database::count("SELECT COUNT(*) AS cnt FROM delivery_notes d $clause", $params);
 

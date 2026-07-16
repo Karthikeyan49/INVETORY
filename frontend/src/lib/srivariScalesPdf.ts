@@ -14,6 +14,12 @@
  * `download*` wrappers save it in the browser.
  */
 import jsPDF from "jspdf";
+import { ensurePdfFonts, calibriReady, CALIBRI } from "./pdfFonts";
+
+// Active typeface for the current document — set per build() to match the
+// source form (Times New Roman for the tax invoice, Calibri/Carlito for the
+// cash bill & delivery challan). Falls back to Helvetica if a font isn't ready.
+let FAM = "helvetica";
 
 // ── Brand palette (sampled from the source templates) ───────────────────────
 const BLUE: [number, number, number] = [46, 117, 182];   // header + "FOR SRI VARI SCALES" on invoice/quotation
@@ -48,7 +54,7 @@ function txt(
   o: { size?: number; bold?: boolean; italic?: boolean; color?: [number, number, number]; align?: "left" | "center" | "right" } = {},
 ) {
   const style = o.bold && o.italic ? "bolditalic" : o.bold ? "bold" : o.italic ? "italic" : "normal";
-  doc.setFont("helvetica", style).setFontSize(o.size ?? 10);
+  doc.setFont(FAM, style).setFontSize(o.size ?? 10);
   setC(doc, o.color ?? BLACK);
   doc.text(s, x, y, { align: o.align ?? "left" });
 }
@@ -82,6 +88,7 @@ export interface InvoiceData {
 
 export function buildTaxInvoice(d: InvoiceData): Doc {
   const doc = newDoc();
+  FAM = "times"; // source form (invoice.pdf) is Times New Roman
   const L = 30, R = 582, W = R - L;
   const cx = (L + R) / 2;
 
@@ -154,10 +161,23 @@ export function buildTaxInvoice(d: InvoiceData): Doc {
   let py = headBottom + 20;
   txt(doc, "ELECTRONIC WEIGHING SCALE", cX[1] + 6, py, { size: 9.5, bold: true });
   py += 22;
+  // Wrap the dynamic values to the PARTICULARS column so long models / multiple
+  // machine numbers stack onto extra lines instead of overflowing through the
+  // TAX%/HSN/QTY/RATE/AMOUNT columns.
+  const invValX = cX[1] + 86;
+  const invValW = cX[2] - invValX - 4;
+  // Colons live in a fixed column (proportional font — space padding never aligns them).
+  const invColonX = cX[1] + 74;
   for (const [lbl, val] of [["MODEL", d.model], ["CAPACITY", d.capacity], ["ACCURACY", d.accuracy], ["MACHINE NO", d.machineNo]] as [string, string | undefined][]) {
-    txt(doc, `${lbl.padEnd(11, " ")}:`, cX[1] + 6, py, { size: 9.5, bold: true });
-    if (val) txt(doc, String(val), cX[1] + 92, py, { size: 9.5 });
-    py += 17;
+    txt(doc, lbl, cX[1] + 6, py, { size: 9.5, bold: true });
+    txt(doc, ":", invColonX, py, { size: 9.5, bold: true });
+    if (val) {
+      const lines = doc.splitTextToSize(String(val), invValW) as string[];
+      lines.forEach((ln, k) => txt(doc, ln, invValX, py + k * 11, { size: 9.5 }));
+      py += Math.max(17, lines.length * 11 + 4);
+    } else {
+      py += 17;
+    }
   }
   const midY = (headBottom + itemBottom) / 2 + 4;
   txt(doc, d.taxPct != null ? `${d.taxPct}%` : "18%", hc(2), midY, { size: 10, bold: true, align: "center" });
@@ -240,6 +260,7 @@ export interface CashBillData {
 }
 export function buildCashBill(d: CashBillData): Doc {
   const doc = newDoc();
+  FAM = calibriReady() ? CALIBRI : "helvetica"; // source form (cash-bill.pdf) is Calibri
   const L = 60, R = 552, cx = (L + R) / 2;
 
   // "CASH BILL" boxed label
@@ -279,7 +300,12 @@ export function buildCashBill(d: CashBillData): Doc {
   txt(doc, "QTY", hc(2), tTop + 20, { size: 10, bold: true, align: "center" });
   txt(doc, "AMOUNT", hc(3), tTop + 20, { size: 10, bold: true, align: "center" });
   txt(doc, "1.", hc(0), headB + 44, { size: 10, bold: true, align: "center" });
-  txt(doc, d.description || "ELECTRONIC WEIGHING SCALE SERVICE", cX[1] + 8, headB + 24, { size: 9.5, bold: true });
+  // Wrap the description within the DESCRIPTION column so long text stacks onto
+  // extra lines instead of overflowing across the QTY and AMOUNT columns.
+  const cbDescX = cX[1] + 8;
+  const cbDescW = cX[2] - cbDescX - 6;
+  (doc.splitTextToSize(d.description || "ELECTRONIC WEIGHING SCALE SERVICE", cbDescW) as string[])
+    .forEach((ln, k) => txt(doc, ln, cbDescX, headB + 24 + k * 12, { size: 9.5, bold: true }));
   txt(doc, d.qty || "1NO", hc(2), headB + 44, { size: 10, bold: true, align: "center" });
   txt(doc, money(d.amount), hc(3), headB + 44, { size: 10, bold: true, align: "center" });
   // subtotal line near lower part of amount column
@@ -293,7 +319,7 @@ export function buildCashBill(d: CashBillData): Doc {
   txt(doc, "FOR SRI VARI SCALES", R, bodyB + 70, { size: 10, bold: true, color: TEAL, align: "right" });
   return doc;
 }
-export function downloadCashBill(d: CashBillData): void { save(buildCashBill(d), d.refNo || "CASH-BILL"); }
+export async function downloadCashBill(d: CashBillData): Promise<void> { await ensurePdfFonts(); save(buildCashBill(d), d.refNo || "CASH-BILL"); }
 
 // ════════════════════════════════════════════════════════════════════════════
 // 3. DELIVERY CHALLAN  (F/SVS/18)
@@ -305,6 +331,7 @@ export interface ChallanData {
 }
 export function buildDeliveryChallan(d: ChallanData): Doc {
   const doc = newDoc();
+  FAM = calibriReady() ? CALIBRI : "helvetica"; // source form (delivery-challan.pdf) is Calibri
   const L = 60, R = 552, cx = (L + R) / 2;
 
   // "DELIVERY CHALLAN" boxed label
@@ -333,7 +360,10 @@ export function buildDeliveryChallan(d: ChallanData): Doc {
   const toTop = 210, toBottom = 268;
   rect(doc, L, toTop, R - L, toBottom - toTop);
   txt(doc, "TO:", L + 8, toTop + 16, { size: 10, bold: true });
-  txt(doc, d.to || "", L + 34, toTop + 16, { size: 10 });
+  // Wrap a long customer name to at most two lines within the TO box.
+  (doc.splitTextToSize(d.to || "", R - (L + 34) - 8) as string[])
+    .slice(0, 2)
+    .forEach((ln, k) => txt(doc, ln, L + 34, toTop + 16 + k * 12, { size: 10 }));
   txt(doc, "CELL NO:", L + 40, toBottom - 10, { size: 10, bold: true });
   txt(doc, d.cellNo || "", L + 104, toBottom - 10, { size: 10 });
 
@@ -353,10 +383,22 @@ export function buildDeliveryChallan(d: ChallanData): Doc {
   let py = headB + 20;
   txt(doc, "ELECTRONIC WEIGHING SCALE", cX[1] + 8, py, { size: 9.5, bold: true });
   py += 20;
+  // Wrap values to the DESCRIPTION column so a long model / multiple machine
+  // numbers stack downward instead of overflowing across QTY and AMOUNT.
+  const dcValX = cX[1] + 110;
+  const dcValW = cX[2] - dcValX - 6;
+  // Colons live in a fixed column (proportional font — space padding never aligns them).
+  const dcColonX = cX[1] + 98;
   for (const [lbl, val] of [["MODEL", d.model], ["CAPACITY", d.capacity], ["ACCURACY", d.accuracy], ["PLATFORM SIZE", d.platformSize], ["MACHINE NO", d.machineNo]] as [string, string | undefined][]) {
-    txt(doc, `${lbl.padEnd(13, " ")}:`, cX[1] + 12, py, { size: 9, bold: true });
-    if (val) txt(doc, String(val), cX[1] + 110, py, { size: 9 });
-    py += 15;
+    txt(doc, lbl, cX[1] + 12, py, { size: 9, bold: true });
+    txt(doc, ":", dcColonX, py, { size: 9, bold: true });
+    if (val) {
+      const lines = doc.splitTextToSize(String(val), dcValW) as string[];
+      lines.forEach((ln, k) => txt(doc, ln, dcValX, py + k * 11, { size: 9 }));
+      py += Math.max(15, lines.length * 11 + 3);
+    } else {
+      py += 15;
+    }
   }
   txt(doc, d.qty || "1NO", hc(2), headB + 40, { size: 10, bold: true, align: "center" });
   txt(doc, money(d.amount ?? 0), hc(3), headB + 40, { size: 10, bold: true, align: "center" });
@@ -370,7 +412,7 @@ export function buildDeliveryChallan(d: ChallanData): Doc {
   txt(doc, "FOR SRI VARI SCALES", R, bodyB + 70, { size: 10, bold: true, color: TEAL, align: "right" });
   return doc;
 }
-export function downloadDeliveryChallan(d: ChallanData): void { save(buildDeliveryChallan(d), d.refNo || "DELIVERY-CHALLAN"); }
+export async function downloadDeliveryChallan(d: ChallanData): Promise<void> { await ensurePdfFonts(); save(buildDeliveryChallan(d), d.refNo || "DELIVERY-CHALLAN"); }
 
 // re-export brand bits the quotation module (below) reuses
 export const _brand = { BLUE, RED, TEAL, LINK, AMBER, MAGENTA, PURPLE, BLACK, GSTIN, BANK, money, txt, rect, hline, vline, newDoc, save, setFill, setDraw };

@@ -63,11 +63,12 @@ class Followup
     {
         return Database::insert(
             "INSERT INTO followups
-                (customer_id, customer_name, machine_id, assigned_to, title, category, note, followup_date, status, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (customer_id, customer_name, mobile, machine_id, assigned_to, title, category, note, followup_date, status, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 !empty($data['customer_id']) ? (int)$data['customer_id'] : null,
                 isset($data['customer_name']) ? trim((string)$data['customer_name']) : null,
+                isset($data['mobile']) && $data['mobile'] !== '' ? trim((string)$data['mobile']) : null,
                 !empty($data['machine_id']) ? (int)$data['machine_id'] : null,
                 !empty($data['assigned_to']) ? (int)$data['assigned_to'] : null,
                 trim((string)$data['title']),
@@ -83,7 +84,7 @@ class Followup
     public static function update(int $id, array $data): bool
     {
         $map = [
-            'customer_name' => 'customer_name', 'machine_id' => 'machine_id',
+            'customer_name' => 'customer_name', 'mobile' => 'mobile', 'machine_id' => 'machine_id',
             'assigned_to' => 'assigned_to', 'title' => 'title', 'category' => 'category',
             'note' => 'note', 'followup_date' => 'followup_date', 'status' => 'status',
         ];
@@ -107,6 +108,39 @@ class Followup
         }
         $params[] = $id;
         return Database::execute("UPDATE followups SET " . implode(', ', $fields) . " WHERE id = ?", $params) >= 0;
+    }
+
+    /**
+     * Cross-source dedup for lead seeding (e.g. the same prospect logged in two
+     * DCRs): is there already an OPEN follow-up for this mobile or name? Mobile
+     * match ignores spaces / dashes / plus so "+91 98…" and "98…" collapse.
+     */
+    public static function openLeadExists(?string $mobile, ?string $customerName): bool
+    {
+        $digits = $mobile !== null ? preg_replace('/[^0-9]/', '', $mobile) : '';
+        if ($digits !== '') {
+            $hit = Database::fetch(
+                "SELECT id FROM followups
+                 WHERE status = 'open' AND mobile IS NOT NULL
+                   AND REGEXP_REPLACE(mobile, '[^0-9]', '') = ?
+                 LIMIT 1",
+                [$digits]
+            );
+            if ($hit) {
+                return true;
+            }
+        }
+        $name = $customerName !== null ? trim($customerName) : '';
+        if ($name !== '') {
+            $hit = Database::fetch(
+                "SELECT id FROM followups WHERE status = 'open' AND LOWER(customer_name) = LOWER(?) LIMIT 1",
+                [$name]
+            );
+            if ($hit) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Open follow-ups due today or overdue — drives both dashboards. */

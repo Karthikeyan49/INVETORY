@@ -105,14 +105,7 @@ class StatisticsController
         $products  = Database::fetch('SELECT COUNT(*) AS total FROM products WHERE is_available = 1');
         $employees = Database::fetch('SELECT COUNT(*) AS total FROM employees WHERE is_active = 1');
 
-        $tasks = Database::fetch(
-            "SELECT COUNT(*) AS total,
-                    SUM(CASE WHEN status = 'Pending'     THEN 1 ELSE 0 END) AS pending,
-                    SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) AS in_progress,
-                    SUM(CASE WHEN status = 'Completed'   THEN 1 ELSE 0 END) AS completed,
-                    SUM(CASE WHEN due_date < CURDATE() AND status != 'Completed' THEN 1 ELSE 0 END) AS overdue
-             FROM tasks"
-        );
+        $tasks = []; // tasks module removed
 
         Response::success([
             'orders' => [
@@ -172,20 +165,10 @@ class StatisticsController
 
     public function tasks(Request $request): void
     {
-        $stats = Database::fetch(
-            "SELECT COUNT(*) AS total,
-                    SUM(CASE WHEN status = 'Pending'     THEN 1 ELSE 0 END) AS pending,
-                    SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) AS in_progress,
-                    SUM(CASE WHEN status = 'Completed'   THEN 1 ELSE 0 END) AS completed,
-                    SUM(CASE WHEN due_date < CURDATE() AND status != 'Completed' THEN 1 ELSE 0 END) AS overdue
-             FROM tasks"
-        );
-
-        foreach ($stats as &$v) {
-            $v = (int)$v;
-        }
-
-        Response::success($stats);
+        // tasks module removed
+        Response::success([
+            'total' => 0, 'pending' => 0, 'in_progress' => 0, 'completed' => 0, 'overdue' => 0,
+        ]);
     }
 
     // ─── GET /statistics/sales ────────────────────────────────────────────────

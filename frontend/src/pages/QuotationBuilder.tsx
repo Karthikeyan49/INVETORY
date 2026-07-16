@@ -537,13 +537,50 @@ export default function QuotationBuilder() {
     }, kind);
   };
 
+  // Mark a quotation Accepted (best-effort) — the update endpoint expects the
+  // whole record, so we resend it with status flipped. Shared by both convert
+  // paths so a converted quotation is always flagged Accepted.
+  const markQuotationAccepted = async (id: number, q: Quotation) => {
+    if (q.status === "Accepted") return;
+    try {
+      await updateQuotation(id, {
+        customer_name: q.customer_name,
+        customer_address: q.customer_address || undefined,
+        customer_gstin: q.customer_gstin || undefined,
+        customer_contact: q.customer_contact || undefined,
+        customer_contact_phone: q.customer_contact_phone || undefined,
+        particular: q.particular || undefined,
+        reference_no: q.reference_no || undefined,
+        prepared_by_name: q.prepared_by_name || undefined,
+        prepared_by_designation: q.prepared_by_designation || undefined,
+        prepared_by_phone: q.prepared_by_phone || undefined,
+        system_title: q.system_title || undefined,
+        quotation_date: q.quotation_date ? q.quotation_date.slice(0, 10) : undefined,
+        advance_amount: q.advance_amount || undefined,
+        advance_date: q.advance_date ? q.advance_date.slice(0, 10) : undefined,
+        terms: q.terms || undefined,
+        notes: q.notes || undefined,
+        status: "Accepted",
+        items: q.items,
+      });
+      load();
+    } catch { /* non-blocking */ }
+  };
+
   // Convert an accepted quotation into a draft Delivery Challan (R3), prefilled
   // from the quotation. Off-books extra flows only when the extended login set it.
   const onConvertToChallan = async (id: number, no: string) => {
-    if (!confirm(`Convert quotation ${no} into a delivery challan?\n\nThis creates a DRAFT challan from the quotation's line items. Review it on the Delivery Challans page.`)) return;
+    let q: Quotation;
+    try { q = await getQuotation(id); }
+    catch (e: any) { toast.error(e?.message ?? "Failed to load quotation"); return; }
+    if (!q.items?.length) { toast.error("This quotation has no line items."); return; }
+    // Double-conversion guard: an already-Accepted quotation has been converted
+    // at least once — require an explicit confirm before creating another challan.
+    const msg = q.status === "Accepted"
+      ? `Quotation ${no} is already marked Accepted (already converted once).\n\nCreate ANOTHER delivery challan from it anyway?`
+      : `Convert quotation ${no} into a delivery challan?\n\nThis creates a DRAFT challan from the quotation's line items. Review it on the Delivery Challans page.`;
+    if (!confirm(msg)) return;
     try {
-      const q: Quotation = await getQuotation(id);
-      if (!q.items?.length) { toast.error("This quotation has no line items."); return; }
       const itemsText = q.items.map((it) => `${it.name}${it.qty ? ` ×${it.qty}` : ""}`).join(", ");
       const amount = Number(q.subtotal ?? 0);
       const taxAmount = Number(q.gst_amount ?? 0);
@@ -555,6 +592,8 @@ export default function QuotationBuilder() {
         notes: `Converted from Quotation ${q.quotation_no}.`,
         status: "draft",
       });
+      // Flag the source quotation Accepted so it's visibly "used" in the list.
+      await markQuotationAccepted(id, q);
       toast.success(`Delivery challan created from ${no}`);
       navigate("/deliveries");
     } catch (e: any) {
@@ -597,10 +636,17 @@ export default function QuotationBuilder() {
   // Convert an accepted quotation into a draft tax invoice, then open Invoices
   // so the user can review states / due date before sending.
   const onConvertToInvoice = async (id: number, no: string) => {
-    if (!confirm(`Convert quotation ${no} into a tax invoice?\n\nThis creates a DRAFT invoice (from the quotation's line items) and marks the quotation Accepted. You can review it on the Invoices page.`)) return;
+    let q: Quotation;
+    try { q = await getQuotation(id); }
+    catch (e: any) { toast.error(e?.message ?? "Failed to load quotation"); return; }
+    if (!q.items?.length) { toast.error("This quotation has no line items to invoice."); return; }
+    // Double-conversion guard: warn before invoicing a quotation that was already
+    // converted (marked Accepted), so a stray second click can't duplicate it.
+    const confirmMsg = q.status === "Accepted"
+      ? `Quotation ${no} is already marked Accepted (already converted once).\n\nCreate ANOTHER tax invoice from it anyway?`
+      : `Convert quotation ${no} into a tax invoice?\n\nThis creates a DRAFT invoice (from the quotation's line items) and marks the quotation Accepted. You can review it on the Invoices page.`;
+    if (!confirm(confirmMsg)) return;
     try {
-      const q = await getQuotation(id);
-      if (!q.items?.length) { toast.error("This quotation has no line items to invoice."); return; }
 
       // Derive seller/customer state from GSTINs so GST splits correctly.
       let sellerState = "";
@@ -631,30 +677,7 @@ export default function QuotationBuilder() {
       });
 
       // Mark the source quotation Accepted (best-effort; conversion already succeeded).
-      if (q.status !== "Accepted") {
-        try {
-          await updateQuotation(id, {
-            customer_name: q.customer_name,
-            customer_address: q.customer_address || undefined,
-            customer_gstin: q.customer_gstin || undefined,
-            customer_contact: q.customer_contact || undefined,
-            customer_contact_phone: q.customer_contact_phone || undefined,
-            particular: q.particular || undefined,
-            reference_no: q.reference_no || undefined,
-            prepared_by_name: q.prepared_by_name || undefined,
-            prepared_by_designation: q.prepared_by_designation || undefined,
-            prepared_by_phone: q.prepared_by_phone || undefined,
-            system_title: q.system_title || undefined,
-            quotation_date: q.quotation_date ? q.quotation_date.slice(0, 10) : undefined,
-            advance_amount: q.advance_amount || undefined,
-            advance_date: q.advance_date ? q.advance_date.slice(0, 10) : undefined,
-            terms: q.terms || undefined,
-            notes: q.notes || undefined,
-            status: "Accepted",
-            items: q.items,
-          });
-        } catch { /* non-blocking */ }
-      }
+      await markQuotationAccepted(id, q);
 
       toast.success(`Invoice ${inv.id} created from ${no}`);
       navigate("/invoices");
@@ -716,7 +739,12 @@ export default function QuotationBuilder() {
             </div>
           ) : rows.map((r) => (
             <div key={r.quotation_id} className="grid grid-cols-12 items-center gap-2 border-b px-4 py-3 text-sm last:border-0">
-              <div className="col-span-2 font-medium text-foreground">{r.quotation_no}</div>
+              <div className="col-span-2 font-medium text-foreground">
+                {r.quotation_no}
+                {r.status === "Accepted" && (
+                  <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary align-middle">Accepted</span>
+                )}
+              </div>
               <div className="col-span-3 truncate">{r.customer_name}</div>
               <div className="col-span-3 truncate text-muted-foreground">{r.particular || "—"}</div>
               <div className="col-span-1 text-xs text-muted-foreground">{r.quotation_date ? r.quotation_date.slice(0, 10) : "—"}</div>

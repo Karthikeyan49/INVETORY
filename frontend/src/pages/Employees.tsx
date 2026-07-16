@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -173,6 +174,11 @@ export default function Employees() {
     }
     return true;
   }), [items, deptFilter, search]);
+
+  const designations = useMemo(
+    () => Array.from(new Set(items.map((e) => e.designation).filter(Boolean))).sort() as string[],
+    [items],
+  );
 
   const stats = useMemo(() => {
     const active = items.filter((e) => e.active).length;
@@ -942,7 +948,7 @@ export default function Employees() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div><Label>Designation</Label><Input value={form.designation} onChange={(e) => setField("designation", e.target.value)} /></div>
+                <div><Label>Designation</Label><Combobox options={designations} value={form.designation} onChange={(v) => setField("designation", v)} /></div>
                 <div>
                   <Label>Role Type</Label>
                   <Select value={form.employmentType ?? "permanent"} onValueChange={(v) => setField("employmentType", v as EmploymentType)}>

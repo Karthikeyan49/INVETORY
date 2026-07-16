@@ -547,4 +547,47 @@ class OrderController
 
         Response::success(null, 'Refund status updated successfully');
     }
+
+    // POST /admin/orders/from-document — create an order from an invoice or delivery challan
+    public function storeFromDocument(Request $request): void
+    {
+        $type = strtolower(trim((string)($request->input('source_type') ?? '')));
+        $id   = (int)($request->input('source_id') ?? 0);
+        if (!in_array($type, ['invoice', 'challan'], true) || $id <= 0) {
+            Response::error('source_type (invoice|challan) and source_id are required', 422);
+        }
+
+        $customerName = 'Customer';
+        $total = 0.0;
+        $ref = '#' . $id;
+        $itemsNote = '';
+
+        if ($type === 'challan') {
+            $d = DeliveryNote::find($id);
+            if (!$d) {
+                Response::error('Delivery challan not found', 404);
+            }
+            $customerName = trim((string)($d['customer_name'] ?? '')) ?: 'Customer';
+            $total = (float)($d['amount'] ?? 0);
+            $ref = (string)($d['challan_no'] ?? $ref);
+            $itemsNote = trim((string)($d['items'] ?? ''));
+        } else {
+            $inv = Database::fetch(
+                "SELECT i.invoice_number, COALESCE(i.customer_name, u.name) AS customer_name, i.total
+                 FROM invoices i LEFT JOIN users u ON u.user_id = i.customer_id
+                 WHERE i.invoice_id = ? LIMIT 1",
+                [$id]
+            );
+            if (!$inv) {
+                Response::error('Invoice not found', 404);
+            }
+            $customerName = trim((string)($inv['customer_name'] ?? '')) ?: 'Customer';
+            $total = (float)($inv['total'] ?? 0);
+            $ref = (string)($inv['invoice_number'] ?? $ref);
+        }
+
+        $notes = 'From ' . ucfirst($type) . ' ' . $ref . ($itemsNote !== '' ? (' — ' . $itemsNote) : '');
+        $orderId = Order::createDirect($customerName, $total, ['source' => $type, 'notes' => $notes]);
+        Response::success(Order::find($orderId), 'Order created from ' . $type, 201);
+    }
 }

@@ -139,12 +139,15 @@ class MachineController
         // Carry the machine's off-books extra onto the invoice — extended login only.
         $extra = $this->taxView($request) === 'extended' ? max(0.0, (float)($m['extra_amount'] ?? 0)) : 0.0;
 
+        // Link the invoice to the machine's real customer id (when known) so the
+        // Customer History tab scopes by id, not just by name.
+        $custId = !empty($m['customer_id']) ? (int)$m['customer_id'] : null;
         $invId = Database::insert(
             "INSERT INTO invoices
-                (invoice_number, customer_name, invoice_date, subtotal, gst_rate, gst_amount,
+                (invoice_number, customer_id, customer_name, invoice_date, subtotal, gst_rate, gst_amount,
                  cgst_amount, sgst_amount, total, extra_amount, status, notes)
-             VALUES (?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, 'Unpaid', ?)",
-            [$number, $customerName, $base, $pct, $gst, round($gst / 2, 2), round($gst / 2, 2), $total, $extra, $notes]
+             VALUES (?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, 'Unpaid', ?)",
+            [$number, $custId, $customerName, $base, $pct, $gst, round($gst / 2, 2), round($gst / 2, 2), $total, $extra, $notes]
         );
         Database::insert(
             "INSERT INTO invoice_items
@@ -369,6 +372,20 @@ class MachineController
             unset($data['extra_amount'], $data['extra_from_vendor']);
         }
         Machine::update($id, $data);
+
+        // Keep the linked vendor purchase in step when the buy price/GST is edited
+        // (the machine ↔ purchase FK, so the Purchases page reflects the change).
+        if (array_key_exists('buy_price', $data) || array_key_exists('buy_gst_pct', $data)) {
+            $m = Machine::find($id);
+            if ($m && !empty($m['purchase_id']) && class_exists('Purchase')) {
+                $sync = [];
+                if (isset($m['buy_price']) && $m['buy_price'] !== null)   { $sync['taxable'] = (float)$m['buy_price']; }
+                if (isset($m['buy_gst_pct']) && $m['buy_gst_pct'] !== null) { $sync['gst_pct'] = (float)$m['buy_gst_pct']; }
+                if ($sync) {
+                    Purchase::update((int)$m['purchase_id'], $sync);
+                }
+            }
+        }
         Response::success(Machine::find($id), 'Machine updated');
     }
 
@@ -383,6 +400,14 @@ class MachineController
         }
         if (!Machine::updateStatus($id, $status)) {
             Response::error('Invalid status. Allowed: ' . implode(', ', Machine::STATUSES), 422);
+        }
+        // Reverting a machine out of a sold/dispatch state back to stock should
+        // retire the stamping auto-opened at delivery, so it no longer counts as
+        // a "renewal due" for a machine that isn't with a customer anymore.
+        $wasSold   = in_array($before['status'] ?? '', ['delivered', 'on_delivery'], true);
+        $nowUnsold = in_array($status, ['in_stock', 'reserved', 'maintenance'], true);
+        if ($wasSold && $nowUnsold && class_exists('Stamping')) {
+            Stamping::cancelForMachine($id);
         }
         if (($before['status'] ?? null) !== $status) {
             MachineMovement::log(

@@ -1,4 +1,4 @@
-import { Search, Eye, FileText, Plus, Trash2 } from "lucide-react";
+import { Search, Eye, FileText, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -10,8 +10,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { fetchOrders, fetchOrder, updateOrderStatus, updateOrderPayment, updateOrderPaymentStatus, generateInvoice, createManualOrder, mapApiOrderToUI } from "@/lib/api/orders";
-import { fetchProducts, type UIProduct } from "@/lib/api/products";
+import { fetchOrders, fetchOrder, updateOrderStatus, updateOrderPayment, updateOrderPaymentStatus, generateInvoice, createOrderFromDocument, mapApiOrderToUI } from "@/lib/api/orders";
+import { fetchDeliveries, type DeliveryNote } from "@/lib/api/deliveries";
+import { invoicesApi, type Invoice } from "@/lib/api/invoices";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 
 export interface OrderItem {
@@ -78,14 +79,6 @@ const statusColors: Record<string, string> = {
 
 const paymentMethods = ["Pending", "COD", "UPI", "Online", "Net Banking", "Wallet"];
 
-// ── Manual order entry (staff walk-in) line item ──
-interface ManualLine {
-  product_id: string;
-  size: string;
-  quantity: string;
-  unit_price: string;
-}
-const emptyManualLine = (): ManualLine => ({ product_id: "", size: "", quantity: "1", unit_price: "" });
 
 
 
@@ -107,17 +100,10 @@ export default function Orders() {
   // Manual order entry
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [products, setProducts] = useState<UIProduct[]>([]);
-  const [custName, setCustName] = useState("");
-  const [custPhone, setCustPhone] = useState("");
-  const [custEmail, setCustEmail] = useState("");
-  const [custAddress, setCustAddress] = useState("");
-  const [custCity, setCustCity] = useState("");
-  const [custPincode, setCustPincode] = useState("");
-  const [newPaymentMethod, setNewPaymentMethod] = useState("Pending");
-  const [newPaymentStatus, setNewPaymentStatus] = useState("pending");
-  const [newNotes, setNewNotes] = useState("");
-  const [newLines, setNewLines] = useState<ManualLine[]>([emptyManualLine()]);
+  const [docType, setDocType] = useState<"invoice" | "challan">("challan");
+  const [docId, setDocId] = useState("");
+  const [challanList, setChallanList] = useState<DeliveryNote[]>([]);
+  const [invoiceList, setInvoiceList] = useState<Invoice[]>([]);
 
   const loadOrders = () => {
     setLoading(true);
@@ -137,59 +123,19 @@ export default function Orders() {
 
   useEffect(() => {
     loadOrders();
-    fetchProducts().then(setProducts).catch(() => { /* product list optional for entry */ });
+    // Orders are created from existing Delivery Challans / Invoices (machine-based, no products).
+    fetchDeliveries().then((r) => setChallanList(r.rows)).catch(() => {});
+    invoicesApi.list().then(setInvoiceList).catch(() => {});
   }, []);
 
-  const num = (v: string) => Number(v || 0);
-  const newTotal = newLines.reduce((s, l) => s + num(l.quantity) * num(l.unit_price), 0);
+  const resetCreateForm = () => { setDocType("challan"); setDocId(""); };
 
-  const setLine = (idx: number, patch: Partial<ManualLine>) =>
-    setNewLines(ls => ls.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
-
-  const pickProduct = (idx: number, productId: string) => {
-    const prod = products.find(p => String(p.id) === productId);
-    const basePrice = prod?._raw?.base_price;
-    setLine(idx, {
-      product_id: productId,
-      unit_price: basePrice != null ? String(basePrice) : "",
-    });
-  };
-
-  const resetCreateForm = () => {
-    setCustName(""); setCustPhone(""); setCustEmail("");
-    setCustAddress(""); setCustCity(""); setCustPincode("");
-    setNewPaymentMethod("Pending"); setNewPaymentStatus("pending");
-    setNewNotes(""); setNewLines([emptyManualLine()]);
-  };
-
-  const submitManualOrder = async () => {
-    if (!custName.trim()) { toast.error("Customer name is required"); return; }
-    if (custPhone.replace(/\D/g, "").length < 7) { toast.error("A valid customer phone is required"); return; }
-    const items = newLines
-      .filter(l => l.product_id && num(l.quantity) > 0)
-      .map(l => ({
-        product_id: Number(l.product_id),
-        quantity: num(l.quantity),
-        unit_price: l.unit_price !== "" ? num(l.unit_price) : undefined,
-        size: l.size || undefined,
-      }));
-    if (!items.length) { toast.error("Add at least one item with a product and quantity"); return; }
-
+  const submitFromDocument = async () => {
+    if (!docId) { toast.error(`Select a ${docType === "challan" ? "delivery challan" : "invoice"}`); return; }
     setCreating(true);
     try {
-      await createManualOrder({
-        customer_name: custName.trim(),
-        customer_phone: custPhone.trim(),
-        customer_email: custEmail.trim() || undefined,
-        delivery_address: custAddress.trim() || undefined,
-        delivery_city: custCity.trim() || undefined,
-        delivery_pincode: custPincode.trim() || undefined,
-        payment_method: newPaymentMethod === "Pending" ? undefined : newPaymentMethod.toLowerCase().replace(/ /g, "_"),
-        payment_status: newPaymentStatus,
-        notes: newNotes.trim() || undefined,
-        items,
-      });
-      toast.success("Order created successfully");
+      await createOrderFromDocument(docType, Number(docId));
+      toast.success("Order created");
       setCreateOpen(false);
       resetCreateForm();
       loadOrders();
@@ -271,75 +217,48 @@ export default function Orders() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Order</DialogTitle>
-            <DialogDescription>Manually enter a walk-in / phone order on behalf of a customer.</DialogDescription>
+            <DialogDescription>Create an order from an existing Delivery Challan or Invoice.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Customer */}
             <div>
-              <h3 className="text-sm font-semibold text-card-foreground mb-2">Customer</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label className="text-xs text-muted-foreground">Name *</Label><Input className="mt-1" value={custName} onChange={e => setCustName(e.target.value)} placeholder="Customer name" /></div>
-                <div><Label className="text-xs text-muted-foreground">Phone *</Label><Input className="mt-1" value={custPhone} onChange={e => setCustPhone(e.target.value)} placeholder="Phone number" /></div>
-                <div><Label className="text-xs text-muted-foreground">Email</Label><Input className="mt-1" value={custEmail} onChange={e => setCustEmail(e.target.value)} placeholder="Optional" /></div>
-                <div><Label className="text-xs text-muted-foreground">City</Label><Input className="mt-1" value={custCity} onChange={e => setCustCity(e.target.value)} /></div>
-                <div className="col-span-2"><Label className="text-xs text-muted-foreground">Delivery Address</Label><Input className="mt-1" value={custAddress} onChange={e => setCustAddress(e.target.value)} /></div>
-                <div><Label className="text-xs text-muted-foreground">Pincode</Label><Input className="mt-1" value={custPincode} onChange={e => setCustPincode(e.target.value)} /></div>
-              </div>
+              <Label className="text-xs text-muted-foreground">Source</Label>
+              <Select value={docType} onValueChange={(v) => { setDocType(v as "invoice" | "challan"); setDocId(""); }}>
+                <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="challan">Delivery Challan</SelectItem>
+                  <SelectItem value="invoice">Invoice</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-
-            {/* Line items */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-card-foreground">Items</h3>
-                <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => setNewLines(l => [...l, emptyManualLine()])}><Plus className="h-3.5 w-3.5" /> Add item</Button>
-              </div>
-              <div className="space-y-2">
-                {newLines.map((line, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-5">
-                      <Select value={line.product_id} onValueChange={v => pickProduct(idx, v)}>
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Select product" /></SelectTrigger>
-                        <SelectContent>
-                          {products.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.product}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-2"><Input className="h-9" placeholder="Size" value={line.size} onChange={e => setLine(idx, { size: e.target.value })} /></div>
-                    <div className="col-span-2"><Input className="h-9" type="number" min="1" placeholder="Qty" value={line.quantity} onChange={e => setLine(idx, { quantity: e.target.value })} /></div>
-                    <div className="col-span-2"><Input className="h-9" type="number" min="0" step="0.01" placeholder="Rate" value={line.unit_price} onChange={e => setLine(idx, { unit_price: e.target.value })} /></div>
-                    <div className="col-span-1 flex justify-end">
-                      {newLines.length > 1 && <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setNewLines(l => l.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 text-right text-sm font-semibold text-card-foreground">Total: ₹{newTotal.toLocaleString("en-IN")}</div>
+              <Label className="text-xs text-muted-foreground">{docType === "challan" ? "Delivery Challan" : "Invoice"} *</Label>
+              <Select value={docId} onValueChange={setDocId}>
+                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={`Select ${docType === "challan" ? "a challan" : "an invoice"}`} /></SelectTrigger>
+                <SelectContent>
+                  {docType === "challan"
+                    ? challanList.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          {c.challan_no} — {c.customer_name || "—"} (₹{Number(c.amount || 0).toLocaleString("en-IN")})
+                        </SelectItem>
+                      ))
+                    : invoiceList.map((iv) => (
+                        <SelectItem key={iv.invoice_id} value={String(iv.invoice_id)}>
+                          {iv.invoice_number} — {iv.customer_name || "—"} (₹{Number(iv.total || 0).toLocaleString("en-IN")})
+                        </SelectItem>
+                      ))}
+                </SelectContent>
+              </Select>
+              {((docType === "challan" && challanList.length === 0) || (docType === "invoice" && invoiceList.length === 0)) && (
+                <p className="mt-1 text-xs text-muted-foreground">No {docType === "challan" ? "challans" : "invoices"} available yet.</p>
+              )}
             </div>
-
-            {/* Payment */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">Payment Method</Label>
-                <Select value={newPaymentMethod} onValueChange={setNewPaymentMethod}>
-                  <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>{paymentMethods.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Payment Status</Label>
-                <Select value={newPaymentStatus} onValueChange={setNewPaymentStatus}>
-                  <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>{["pending", "paid"].map(s => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="col-span-2"><Label className="text-xs text-muted-foreground">Notes</Label><Textarea className="mt-1" rows={2} value={newNotes} onChange={e => setNewNotes(e.target.value)} placeholder="Optional notes..." /></div>
-            </div>
+            <p className="text-xs text-muted-foreground">The order copies the customer, machine items and amount from the selected document.</p>
           </div>
 
           <DialogFooter className="gap-2">
             <DialogClose asChild><Button variant="outline" disabled={creating}>Cancel</Button></DialogClose>
-            <Button onClick={submitManualOrder} disabled={creating}>{creating ? "Creating…" : "Create Order"}</Button>
+            <Button onClick={submitFromDocument} disabled={creating}>{creating ? "Creating…" : "Create Order"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

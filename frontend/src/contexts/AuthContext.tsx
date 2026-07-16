@@ -134,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       const type = response?.data?.user?.user_type?.toLowerCase();
-      if (response?.success && (type === "admin" || type === "dealer")) {
+      if (response?.success && type === "admin") { // dealer accounts removed — staff only
         const session = {
           email: response.data.user.email,
           name: response.data.user.name || "",

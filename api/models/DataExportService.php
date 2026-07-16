@@ -74,9 +74,6 @@ class DataExportService
                                FROM employee_compliance c
                                JOIN employees e ON e.employee_key = c.employee_key',
             ],
-            'meetings' => self::definition('Meetings', 'meetings', [
-                'meeting_id', 'title', 'date', 'time', 'location', 'agenda', 'notes', 'created_at',
-            ], 'date', null),
         ];
     }
 

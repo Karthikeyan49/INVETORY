@@ -76,6 +76,39 @@ export async function createDcr(data: DcrInput): Promise<Dcr> {
   return res.data;
 }
 
+/** Header fields the PDF extractor can pre-fill on the New-DCR form. */
+export interface ExtractedDcrHeader {
+  employee_name: string;
+  report_date: string;
+  area: string;
+  opening_km: number;
+  closing_km: number;
+  total_km: number;
+  notes: string;
+}
+
+export interface ExtractedDcr {
+  header: ExtractedDcrHeader;
+  lines: DcrLine[];
+}
+
+/**
+ * Upload a DCR PDF and get back a structured { header, lines } payload to
+ * pre-fill the form. Nothing is saved — the user reviews / edits, then saves
+ * via createDcr(). Mirrors the bill-extract flow.
+ */
+export async function extractDcrFromPdf(file: File): Promise<ExtractedDcr> {
+  // 100% in the browser, NO AI and NO server call: pdf.js reads the F-SVS-01
+  // layout and a rule-based parser reconstructs the header + visit rows. The
+  // parser (with pdf.js) is lazy-loaded so it only ships on actual upload.
+  const { parseDcrPdf } = await import("../dcrPdfParse");
+  const result = await parseDcrPdf(file);
+  if (!result.lines.length && !result.header.employee_name) {
+    throw new Error("Couldn't read this DCR PDF. It may be a scanned image or a different layout — please enter the report manually.");
+  }
+  return result;
+}
+
 export async function updateDcr(id: number, data: Partial<DcrInput>): Promise<Dcr> {
   const res = await apiFetch<OneResponse>(`/admin/dcr/${id}`, { method: "PUT", body: JSON.stringify(data) });
   return res.data;

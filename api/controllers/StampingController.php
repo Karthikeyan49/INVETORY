@@ -54,6 +54,12 @@ class StampingController
         if (empty($data['machine_id'])) {
             Response::error('machine_id is required', 422);
         }
+        // Guard against a duplicate active stamping — a machine keeps ONE live
+        // record per period. Renew (or edit) the existing one instead.
+        $active = Stamping::activeForMachine((int)$data['machine_id']);
+        if ($active) {
+            Response::error('This machine already has an active stamping. Renew it or edit the existing record instead.', 409);
+        }
         // Off-books extra is extended-login only.
         if (!self::isExtended($request)) {
             unset($data['extra_amount']);
@@ -61,6 +67,18 @@ class StampingController
         $data['created_by'] = $request->user['user_id'] ?? null;
         $id = Stamping::create($data);
         Response::success(Stamping::withLedgerRow(Stamping::find($id), self::isExtended($request)), 'Stamping recorded', 201);
+    }
+
+    // PUT /stampings/{id}  — edit certificate no / stamp date / notes (non-money)
+    public function update(Request $request): void
+    {
+        $id = (int)$request->param('id');
+        if ($id <= 0 || !Stamping::find($id)) {
+            Response::error('Stamping not found', 404);
+        }
+        $data = $request->only(['certificate_no', 'stamp_date', 'notes']);
+        Stamping::update($id, $data);
+        Response::success(Stamping::withLedgerRow(Stamping::find($id), self::isExtended($request)), 'Stamping updated');
     }
 
     // PUT /stampings/{id}/fee  — set the stamping fee / off-books extra (R9)
@@ -85,7 +103,12 @@ class StampingController
         if ($id <= 0 || !Stamping::find($id)) {
             Response::error('Stamping not found', 404);
         }
-        Stamping::renew($id, $request->input('stamp_date'));
+        $feeData = $request->only(['total_amount', 'advance', 'payment_category', 'utr_no', 'extra_amount', 'certificate_no']);
+        if (!self::isExtended($request)) {
+            unset($feeData['extra_amount']);
+        }
+        $feeData['created_by'] = $request->user['user_id'] ?? null;
+        Stamping::renew($id, $request->input('stamp_date'), $feeData);
         Response::success(null, 'Stamping renewed');
     }
 

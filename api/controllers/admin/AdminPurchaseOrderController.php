@@ -167,6 +167,17 @@ class AdminPurchaseOrderController
             error_log('Inventory sync from GRN #' . $grnId . ' failed: ' . $e->getMessage());
         }
 
+        // ── Real stock connection: also land received goods in the Spare parts
+        // register (match by product name, else auto-create). Without this, a
+        // procurement receipt only ever touched the smart-inventory tables that
+        // the Spares/Machines pages never read — so goods "received" here were
+        // never usable stock anywhere staff actually look. Best-effort.
+        try {
+            $this->stockSparesFromGrn($lines, $grnId, isset($request->user['user_id']) ? (int)$request->user['user_id'] : null);
+        } catch (Throwable $e) {
+            error_log('Spare stock-in from GRN #' . $grnId . ' failed: ' . $e->getMessage());
+        }
+
         Response::success(PurchaseOrder::findById($id), 'Goods receipt created', 201);
     }
 
@@ -220,6 +231,49 @@ class AdminPurchaseOrderController
                  WHERE inv_product_id = ? AND status = 'PENDING'",
                 [$invProductId]
             );
+        }
+    }
+
+    /**
+     * Bridge a goods receipt into real, usable Spare stock. For each received
+     * line, top up the matching spare (by product name) or create it, recording
+     * a 'receive' movement so the Spares page and its ledger reflect the receipt.
+     */
+    private function stockSparesFromGrn(array $lines, int $grnId, ?int $actorId): void
+    {
+        if (!class_exists('Spare')) {
+            return;
+        }
+        foreach ($lines as $line) {
+            if (empty($line['product_id'])) {
+                continue;
+            }
+            $qty = (int)round((float)($line['quantity'] ?? 0));
+            if ($qty <= 0) {
+                continue;
+            }
+            $product = Database::fetch(
+                'SELECT product_name, category, unit FROM products WHERE product_id = ? LIMIT 1',
+                [(int)$line['product_id']]
+            );
+            $name = trim((string)($product['product_name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $spare = Database::fetch('SELECT id FROM spares WHERE name = ? LIMIT 1', [$name]);
+            if ($spare) {
+                Spare::move((int)$spare['id'], $qty, 'receive', null, 'GRN #' . $grnId, $actorId);
+            } else {
+                $newId = Spare::create([
+                    'name'       => $name,
+                    'category'   => $product['category'] ?? null,
+                    'unit'       => $product['unit'] ?? null,
+                    'quantity'   => 0,
+                    'unit_cost'  => (float)($line['unit_cost'] ?? 0),
+                    'created_by' => $actorId,
+                ]);
+                Spare::move($newId, $qty, 'receive', null, 'GRN #' . $grnId . ' (auto-created)', $actorId);
+            }
         }
     }
 

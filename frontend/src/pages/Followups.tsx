@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
+import { Combobox } from "@/components/ui/combobox";
 import {
   fetchFollowups, createFollowup, updateFollowup, FOLLOWUP_LABELS,
   type Followup, type FollowupStatus,
@@ -50,6 +51,12 @@ export default function Followups() {
   }
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [statusFilter, categoryFilter]);
+  // Real-time search — debounced so we don't fire a request on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => load(), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
   const categories = Array.from(new Set(rows.map((r) => r.category).filter(Boolean))) as string[];
 
   async function handleCreate() {
@@ -97,7 +104,7 @@ export default function Followups() {
             <div className="space-y-3">
               <Input placeholder="Title / reason *" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               <Input placeholder="Customer name" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
-              <Input placeholder="Category (e.g. Sales, Service, Payment)" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+              <Combobox options={categories} placeholder="Category (e.g. Sales, Service, Payment)" value={form.category} onChange={(v) => setForm({ ...form, category: v })} />
               <div>
                 <label className="text-xs text-muted-foreground">Follow-up date</label>
                 <Input type="date" value={form.followup_date} onChange={(e) => setForm({ ...form, followup_date: e.target.value })} />
@@ -123,7 +130,7 @@ export default function Followups() {
         <div className="relative">
           <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
           <Input className="pl-8 w-64" placeholder="Search title / customer…" value={search}
-            onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
+            onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as FollowupStatus | "all")}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
@@ -139,7 +146,6 @@ export default function Followups() {
             {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={load}>Search</Button>
       </div>
 
       <div className="border rounded-lg overflow-x-auto">

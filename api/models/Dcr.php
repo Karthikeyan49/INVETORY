@@ -203,9 +203,15 @@ class Dcr
                 if (!$isProspect || !empty($ln['followup_id']) || empty($ln['customer'])) {
                     continue;
                 }
+                // Cross-DCR dedup: skip if this prospect already has an open lead
+                // (same mobile, or same name when no mobile was captured).
+                if (Followup::openLeadExists($ln['mobile'] ?? null, $ln['customer'])) {
+                    continue;
+                }
                 try {
                     $fid = Followup::create([
                         'customer_name' => $ln['customer'],
+                        'mobile'        => $ln['mobile'] ?? null,
                         'title'         => 'Lead from DCR ' . $dcr['dcr_no'] . ($dcr['area'] ? ' — ' . $dcr['area'] : ''),
                         'category'      => $ln['category'] ?: 'Field visit',
                         'note'          => trim(($ln['model'] ? 'Model: ' . $ln['model'] . '. ' : '') . ($ln['remarks'] ?? '')) ?: null,

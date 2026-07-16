@@ -150,18 +150,63 @@ class Spare
         );
         Database::execute("UPDATE spares SET quantity = ? WHERE id = ?", [$newQty, $id]);
 
-        // Mirror machine-fitted consumption into the machine movements log where present.
-        if ($machineId && $delta < 0 && class_exists('MachineMovement')) {
-            MachineMovement::log(
-                $machineId,
-                'spare_fitted',
-                trim(($spare['name'] ?? 'Spare') . ' ×' . $qty . ($note ? " — $note" : '')),
-                null,
-                null,
-                $actorId ?: null
-            );
+        // Mirror machine-fitted consumption into the machine movements log AND
+        // register it as a real fitted part on the machine, so it shows on the
+        // machine's Parts tab (not just the movement feed).
+        if ($machineId && $delta < 0) {
+            if (class_exists('MachineMovement')) {
+                MachineMovement::log(
+                    $machineId,
+                    'spare_fitted',
+                    trim(($spare['name'] ?? 'Spare') . ' ×' . $qty . ($note ? " — $note" : '')),
+                    null,
+                    null,
+                    $actorId ?: null
+                );
+            }
+            self::registerFittedPart($machineId, $spare, $qty);
         }
         return $newQty;
+    }
+
+    /**
+     * Record a consumed spare as a 'present' part on the machine's Parts tab.
+     * If the same spare is already fitted (matched by part_no, else by name),
+     * its quantity is topped up rather than duplicating the row. Best-effort —
+     * never blocks the stock movement it mirrors.
+     */
+    private static function registerFittedPart(int $machineId, array $spare, int $qty): void
+    {
+        if ($qty <= 0) {
+            return;
+        }
+        try {
+            $partName = trim((string)($spare['name'] ?? 'Spare')) ?: 'Spare';
+            $partNo   = trim((string)($spare['part_no'] ?? ''));
+            $existing = $partNo !== ''
+                ? Database::fetch(
+                    "SELECT id, qty FROM machine_parts WHERE machine_id = ? AND part_name = ? LIMIT 1",
+                    [$machineId, $partName]
+                  )
+                : Database::fetch(
+                    "SELECT id, qty FROM machine_parts WHERE machine_id = ? AND part_name = ? AND status <> 'missing' LIMIT 1",
+                    [$machineId, $partName]
+                  );
+            if ($existing) {
+                Database::execute(
+                    "UPDATE machine_parts SET qty = qty + ?, status = 'present' WHERE id = ?",
+                    [$qty, (int)$existing['id']]
+                );
+            } else {
+                Database::insert(
+                    "INSERT INTO machine_parts (machine_id, part_name, product_id, qty, status)
+                     VALUES (?, ?, NULL, ?, 'present')",
+                    [$machineId, $partName, $qty]
+                );
+            }
+        } catch (\Throwable $e) {
+            error_log('[Spare::registerFittedPart] ' . $e->getMessage());
+        }
     }
 
     public static function movements(int $id, int $limit = 50): array

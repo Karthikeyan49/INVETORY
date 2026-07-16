@@ -21,6 +21,8 @@ export interface PartTransfer {
   id: number;
   part_name: string;
   qty: number;
+  from_machine_id?: number;
+  to_machine_id?: number;
   from_code?: string | null;
   to_code?: string | null;
   created_at?: string;

@@ -61,10 +61,16 @@ export default function Incentives() {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [statusFilter, search]);
 
-  useEffect(() => { load(); }, [load]);
+  // statusFilter changes load immediately; search is debounced so we don't
+  // fire a request on every keystroke.
+  useEffect(() => { load(); }, [statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const t = setTimeout(() => load(), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
   useEffect(() => { employeesApi.list().then(setEmployees).catch(() => {}); }, []);
 
   // Live computed amount preview.
@@ -156,12 +162,11 @@ export default function Incentives() {
       </div>
 
       <div className="flex gap-2 flex-wrap items-center">
-        <Input placeholder="Search payee" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} className="w-56" />
+        <Input placeholder="Search payee" value={search} onChange={(e) => setSearch(e.target.value)} className="w-56" />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="unpaid">Unpaid</SelectItem><SelectItem value="paid">Paid</SelectItem></SelectContent>
         </Select>
-        <Button variant="outline" onClick={load}>Search</Button>
       </div>
 
       <div className="border rounded-lg overflow-x-auto">

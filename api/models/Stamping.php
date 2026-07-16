@@ -102,6 +102,53 @@ class Stamping
         return $id;
     }
 
+    /**
+     * Edit the non-money fields of a stamping (certificate no, stamp date, notes).
+     * Changing the stamp date recomputes the expiry + quarter and promotes a
+     * still-pending record to 'stamped'. Money fields go through updateFee().
+     */
+    public static function update(int $id, array $data): bool
+    {
+        $fields = [];
+        $params = [];
+        if (array_key_exists('certificate_no', $data)) {
+            $cert = trim((string)($data['certificate_no'] ?? ''));
+            $fields[] = 'certificate_no = ?';
+            $params[] = $cert !== '' ? $cert : null;
+        }
+        if (array_key_exists('notes', $data)) {
+            $notes = trim((string)($data['notes'] ?? ''));
+            $fields[] = 'notes = ?';
+            $params[] = $notes !== '' ? $notes : null;
+        }
+        if (array_key_exists('stamp_date', $data)) {
+            $stampDate = !empty($data['stamp_date']) ? (string)$data['stamp_date'] : null;
+            $fields[] = 'stamp_date = ?';   $params[] = $stampDate;
+            $fields[] = 'expiry_date = ?';  $params[] = self::computeExpiry($stampDate);
+            $fields[] = 'quarter = ?';      $params[] = self::quarterOf($stampDate);
+            if ($stampDate) {
+                // A date now exists — promote a pending record; leave others as-is.
+                $fields[] = "status = CASE WHEN status = 'pending' THEN 'stamped' ELSE status END";
+            }
+        }
+        if (!$fields) {
+            return false;
+        }
+        $params[] = $id;
+        return Database::execute("UPDATE stampings SET " . implode(', ', $fields) . " WHERE id = ?", $params) >= 0;
+    }
+
+    /** The current active (non-renewed, non-expired) stamping for a machine, if any. */
+    public static function activeForMachine(int $machineId): ?array
+    {
+        return Database::fetch(
+            "SELECT id, certificate_no FROM stampings
+             WHERE machine_id = ? AND status NOT IN ('renewed','expired')
+             ORDER BY id DESC LIMIT 1",
+            [$machineId]
+        );
+    }
+
     /** Update the fee / extra amount on a stamping record (R9 / T5). */
     public static function updateFee(int $id, array $data): bool
     {
@@ -181,8 +228,14 @@ class Stamping
         ]);
     }
 
-    /** Renew: close the current stamp and open a fresh one-year window. */
-    public static function renew(int $id, ?string $newStampDate = null): bool
+    /**
+     * Renew: close the current stamp and open a fresh one-year window. $feeData
+     * (total_amount / advance / payment_category / utr_no / extra_amount /
+     * created_by) carries the renewal fee + any payment straight into the new
+     * period's ledger, same as a fresh stamping — trailing array wins so the
+     * caller can't override machine identity via feeData.
+     */
+    public static function renew(int $id, ?string $newStampDate = null, array $feeData = []): bool
     {
         $current = self::find($id);
         if (!$current) {
@@ -190,12 +243,12 @@ class Stamping
         }
         $date = $newStampDate ?: date('Y-m-d');
         Database::execute("UPDATE stampings SET status = 'renewed' WHERE id = ?", [$id]);
-        self::create([
+        self::create(array_merge($feeData, [
             'machine_id'  => (int)$current['machine_id'],
             'customer_id' => $current['customer_id'] ? (int)$current['customer_id'] : null,
             'stamp_date'  => $date,
             'status'      => 'stamped',
-        ]);
+        ]));
         return true;
     }
 
@@ -206,6 +259,38 @@ class Stamping
         }
         Database::execute("UPDATE stampings SET status = ? WHERE id = ?", [$status, $id]);
         return true;
+    }
+
+    /**
+     * Called when a machine is pulled back out of a delivered/on-delivery state
+     * (e.g. a wrong dispatch reverted). Removes the auto-opened stamping so it
+     * stops raising false "renewal due" alerts for a machine that is no longer
+     * with a customer. Only untouched auto-stampings are removed — any stamping
+     * with a real certificate or a recorded payment is kept intact.
+     */
+    public static function cancelForMachine(int $machineId): int
+    {
+        $rows = Database::fetchAll(
+            "SELECT id, certificate_no FROM stampings
+             WHERE machine_id = ? AND status NOT IN ('renewed','expired')",
+            [$machineId]
+        );
+        if (!$rows) {
+            return 0;
+        }
+        $paidMap = class_exists('PaymentInstallment') ? PaymentInstallment::paidTotalsByType('stamping') : [];
+        $removed = 0;
+        foreach ($rows as $r) {
+            $id = (int)$r['id'];
+            $hasCert = trim((string)($r['certificate_no'] ?? '')) !== '';
+            $paid    = (float)($paidMap[$id] ?? 0);
+            if ($hasCert || $paid > 0.005) {
+                continue; // real work recorded — leave it alone
+            }
+            Database::execute("DELETE FROM stampings WHERE id = ?", [$id]);
+            $removed++;
+        }
+        return $removed;
     }
 
     /** Records whose renewal falls within $days (or already lapsed) — drives alerts. */

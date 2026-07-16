@@ -82,12 +82,13 @@ class Purchase
 
         return Database::insert(
             "INSERT INTO purchases
-                (purchase_no, vendor_name, location, purchase_type, taxable, gst_pct, gst_amount,
+                (purchase_no, vendor_name, machine_id, location, purchase_type, taxable, gst_pct, gst_amount,
                  extra_amount, total, advance, amount_paid, payment_method, utr_no, purchase_date, notes, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 self::nextNo(),
                 trim((string)$data['vendor_name']),
+                !empty($data['machine_id']) ? (int)$data['machine_id'] : null,
                 isset($data['location']) && $data['location'] !== '' ? trim((string)$data['location']) : null,
                 $type,
                 $taxable, $gstPct, $gst, $extra, $total, $advance, $paid,

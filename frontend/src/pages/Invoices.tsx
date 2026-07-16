@@ -18,6 +18,7 @@ import { fetchGstinDetails, gstinCompanyName } from "@/lib/api/gstinLookup";
 import { phase2Api, type ApiRow } from "@/lib/api/phase2";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Combobox } from "@/components/ui/combobox";
 import { cn, noComboboxMatch } from "@/lib/utils";
 import {
   downloadInvoiceTemplatePdf,
@@ -464,6 +465,7 @@ export default function Invoices() {
   const [newForm, setNewForm] = useState<NewInvoiceForm>(emptyNewForm());
   const [newSaving, setNewSaving] = useState(false);
   const [companies, setCompanies] = useState<CompanySuggestion[]>([]);
+  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [companyPopOpen, setCompanyPopOpen] = useState(false);
   const [gstFetching, setGstFetching] = useState(false);
   const [products, setProducts] = useState<ProductSuggestion[]>([]);
@@ -797,8 +799,11 @@ export default function Invoices() {
     if (!newOpen) return;
     Promise.all([
       fetchCustomers(100, "customer").catch(() => []),
-      apiFetch<{ data: Array<{ customer_name: string | null; customer_gstin: string | null; customer_state: string | null; customer_address: string | null }> }>("/admin/invoices?limit=500").catch(() => ({ data: [] })),
+      apiFetch<{ data: Array<{ customer_name: string | null; customer_gstin: string | null; customer_state: string | null; customer_address: string | null; location: string | null }> }>("/admin/invoices?limit=500").catch(() => ({ data: [] })),
     ]).then(([customers, invoicesRes]) => {
+      setLocationSuggestions(
+        Array.from(new Set((invoicesRes.data ?? []).map(inv => inv.location).filter((v): v is string => !!v))).sort(),
+      );
       const seen = new Set<string>();
       const list: CompanySuggestion[] = [];
       for (const c of customers) {
@@ -1197,7 +1202,7 @@ const viewInvoice = async (inv: Invoice) => {
                 )}
                 <div>
                   <Label>Location / Area</Label>
-                  <Input value={newForm.location} onChange={e => setNewForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Coimbatore" />
+                  <Combobox options={locationSuggestions} value={newForm.location} onChange={v => setNewForm(f => ({ ...f, location: v }))} placeholder="e.g. Coimbatore" />
                 </div>
                 <div>
                   <Label>Payment Status</Label>

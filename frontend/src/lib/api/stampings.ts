@@ -69,8 +69,26 @@ export async function fetchStampingAlerts(days = 7): Promise<StampingAlerts> {
   return res.data ?? { overdue: [], due_soon: [], pending: [], counts: { overdue: 0, due_soon: 0, pending: 0 } };
 }
 
-export async function renewStamping(id: number, stamp_date?: string): Promise<void> {
-  await apiFetch(`/stampings/${id}/renew`, { method: "PUT", body: JSON.stringify({ stamp_date }) });
+export interface RenewStampingInput {
+  stamp_date?: string;
+  certificate_no?: string;
+  total_amount?: number;
+  advance?: number;
+  payment_category?: string;
+  utr_no?: string;
+  extra_amount?: number; // extended login only
+}
+export async function renewStamping(id: number, data: RenewStampingInput): Promise<void> {
+  await apiFetch(`/stampings/${id}/renew`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+/** Edit non-money fields: certificate no, stamp date (recomputes expiry), notes. */
+export async function updateStamping(
+  id: number,
+  data: { certificate_no?: string; stamp_date?: string; notes?: string },
+): Promise<Stamping> {
+  const res = await apiFetch<OneResponse>(`/stampings/${id}`, { method: "PUT", body: JSON.stringify(data) });
+  return res.data;
 }
 
 export async function setStampingStatus(id: number, status: StampingStatus): Promise<void> {

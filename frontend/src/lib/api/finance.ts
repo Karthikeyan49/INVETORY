@@ -59,27 +59,7 @@ function buildQuery(params?: { from?: string; to?: string }): string {
   return parts.length ? "?" + parts.join("&") : "";
 }
 
-export interface FinanceAiAnalysis {
-  period: { from: string; to: string };
-  health_score: number;
-  headline: string;
-  summary: string;
-  drivers: string[];
-  risks: string[];
-  recommendations: string[];
-  outlook: string;
-  figures?: Record<string, unknown>;
-  generated_at: string;
-}
-
 export const financeApi = {
-  async aiAnalysis(params?: { from?: string; to?: string }): Promise<FinanceAiAnalysis> {
-    const res = await apiFetch<ApiEnvelope<FinanceAiAnalysis>>(
-      "/admin/finance/ai-analysis" + buildQuery(params),
-      { method: "POST", body: JSON.stringify({}) },
-    );
-    return res.data;
-  },
   async pnl(params?: { from?: string; to?: string }): Promise<PnLSummary> {
     const res = await apiFetch<ApiEnvelope<PnLSummary>>("/admin/finance/pnl" + buildQuery(params));
     return res.data;

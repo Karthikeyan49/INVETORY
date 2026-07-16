@@ -34,9 +34,22 @@ class AdminInvoiceController
             $where[]  = 'o.user_id = ?';
             $params[] = $userId;
         }
-        // Exact (case-insensitive) customer name match — used by the Customers page to
-        // show invoices for a customer even when they were never linked to an order/user_id.
-        if ($custName = $request->query('customer_name')) {
+        // Customer scoping for the Customers page history tab. Preferring the real
+        // customer_id stops two same-named customers from leaking into each other's
+        // history; the name fallback keeps legacy (unlinked) invoices visible.
+        $custId   = (int)$request->query('customer_id');
+        $custName = $request->query('customer_name');
+        if ($custId > 0) {
+            if ($custName !== null && $custName !== '') {
+                $where[]  = '(i.customer_id = ? OR (i.customer_id IS NULL AND LOWER(COALESCE(i.customer_name, u.name)) = LOWER(?)))';
+                $params[] = $custId;
+                $params[] = $custName;
+            } else {
+                $where[]  = 'i.customer_id = ?';
+                $params[] = $custId;
+            }
+        } elseif ($custName !== null && $custName !== '') {
+            // Exact (case-insensitive) customer name match — used when no id is known.
             $where[]  = 'LOWER(COALESCE(i.customer_name, u.name)) = LOWER(?)';
             $params[] = $custName;
         }

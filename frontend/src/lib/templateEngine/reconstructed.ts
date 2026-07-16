@@ -7,6 +7,7 @@
  */
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { ensurePdfFonts, calibriReady, CALIBRI } from "../pdfFonts";
 import type { TemplateDef, TemplateColumn, CompanyInfo, RGB, DocInputs } from "./types";
 import {
   resolveCompany, brandColor, fillTokens, fmtDate, money, rupees, num, s, trimRate, trimNum,
@@ -26,7 +27,11 @@ export async function renderReconstructed(def: TemplateDef, inputs: DocInputs): 
   const items = (inputs[def.table?.items || "items"] as any[]) || [];
   const inter = def.taxMode === "split" ? isInterState(inputs) : false;
 
+  // Match the source quotation forms' typeface (Calibri) via the OFL Carlito
+  // substitute; falls back to Helvetica if the weights aren't available.
+  await ensurePdfFonts();
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: def.page?.format || "a4" });
+  const FONT = calibriReady() ? CALIBRI : "helvetica";
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   const M = def.page?.margin ?? 36;
@@ -50,7 +55,7 @@ export async function renderReconstructed(def: TemplateDef, inputs: DocInputs): 
     if (lines.length) {
       const boxX = W - M - 200;
       doc.line(boxX, y, boxX, y + bandH);
-      doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(...C);
+      doc.setFont(FONT, "bold").setFontSize(11).setTextColor(...C);
       const step = Math.min(20, (bandH - 8) / lines.length);
       lines.forEach((l, i) => doc.text(T(l), boxX + 100, y + 20 + i * step, { align: "center" }));
     }
@@ -60,7 +65,7 @@ export async function renderReconstructed(def: TemplateDef, inputs: DocInputs): 
   // ── title band ─────────────────────────────────────────────────────────────
   if (def.title) {
     doc.setDrawColor(...C).setLineWidth(1).rect(M, y, W - 2 * M, 22);
-    doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(...C);
+    doc.setFont(FONT, "bold").setFontSize(12).setTextColor(...C);
     doc.text(T(def.title).toUpperCase(), W / 2, y + 15, { align: "center" });
     y += 22;
   }
@@ -69,7 +74,7 @@ export async function renderReconstructed(def: TemplateDef, inputs: DocInputs): 
     const st = T(def.subtitleField);
     if (st) {
       doc.setDrawColor(...C).setLineWidth(0.8).rect(M, y, W - 2 * M, 18);
-      doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(60, 60, 60);
+      doc.setFont(FONT, "bold").setFontSize(10).setTextColor(60, 60, 60);
       doc.text(st.toUpperCase(), W / 2, y + 12, { align: "center" });
       y += 18;
     }
@@ -94,24 +99,24 @@ export async function renderReconstructed(def: TemplateDef, inputs: DocInputs): 
 
     let ly = y + 14;
     if (def.party.leftHeading) {
-      doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(40, 40, 40);
+      doc.setFont(FONT, "bold").setFontSize(9).setTextColor(40, 40, 40);
       doc.text(def.party.leftHeading, M + 6, ly); ly += 12;
     }
-    doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(60, 60, 60);
+    doc.setFont(FONT, "normal").setFontSize(8.5).setTextColor(60, 60, 60);
     leftWrapped.forEach((l) => { doc.text(l, M + 6, ly); ly += 11; });
 
     let ry = y + 14;
     if (def.party.rightHeading) {
-      doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(40, 40, 40);
+      doc.setFont(FONT, "bold").setFontSize(9).setTextColor(40, 40, 40);
       doc.text(def.party.rightHeading, colSplit + 8, ry); ry += 12;
-      doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(60, 60, 60);
+      doc.setFont(FONT, "normal").setFontSize(8.5).setTextColor(60, 60, 60);
       rightBody.forEach((l) => { doc.text(l, colSplit + 8, ry); ry += 11; });
       ry += 2;
     }
     meta.forEach(([label, val]) => {
-      doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(40, 40, 40);
+      doc.setFont(FONT, "bold").setFontSize(8.5).setTextColor(40, 40, 40);
       doc.text(label, colSplit + 8, ry);
-      doc.setFont("helvetica", "normal").setTextColor(60, 60, 60);
+      doc.setFont(FONT, "normal").setTextColor(60, 60, 60);
       doc.text(String(val), W - M - 6, ry, { align: "right" });
       ry += 15;
     });
@@ -144,8 +149,8 @@ export async function renderReconstructed(def: TemplateDef, inputs: DocInputs): 
       // Keep a bottom margin so a paginated table never runs into the page edge,
       // and so trailing content (totals/notes) has a predictable break point.
       margin: { left: M, right: M, top: M, bottom: M },
-      styles: { fontSize: 7.6, cellPadding: 3, lineColor: [200, 200, 200], lineWidth: 0.5, textColor: [40, 40, 40] },
-      headStyles: { fillColor: C, textColor: 255, fontSize: 7.6, halign: "center", fontStyle: "bold" },
+      styles: { font: FONT, fontSize: 7.6, cellPadding: 3, lineColor: [200, 200, 200], lineWidth: 0.5, textColor: [40, 40, 40] },
+      headStyles: { font: FONT, fillColor: C, textColor: 255, fontSize: 7.6, halign: "center", fontStyle: "bold" },
       columnStyles,
     });
     // autoTable leaves the document on its last page; finalY is the y on that page.
@@ -180,7 +185,7 @@ export async function renderReconstructed(def: TemplateDef, inputs: DocInputs): 
       doc.setDrawColor(200, 200, 200).setLineWidth(0.5).rect(tx, y, totW, 18);
       doc.line(tx + totW * 0.5, y, tx + totW * 0.5, y + 18);
       if (bold) { doc.setFillColor(C[0], C[1], C[2]); doc.rect(tx, y, totW, 18, "F"); }
-      doc.setFont("helvetica", bold ? "bold" : "normal").setFontSize(9)
+      doc.setFont(FONT, bold ? "bold" : "normal").setFontSize(9)
         .setTextColor(bold ? 255 : 40, bold ? 255 : 40, bold ? 255 : 40);
       doc.text(label, tx + totW * 0.5 - 6, y + 12, { align: "right" });
       doc.text(val, W - M - 6, y + 12, { align: "right" });
@@ -193,9 +198,9 @@ export async function renderReconstructed(def: TemplateDef, inputs: DocInputs): 
     const words = doc.splitTextToSize(rupeesInWords(totalsCalc.grandTotal), W - 2 * M - 90);
     const block = 14 + Math.max(1, words.length) * 11 + 6;
     ensure(block); y += 14;
-    doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(40, 40, 40);
+    doc.setFont(FONT, "bold").setFontSize(8.5).setTextColor(40, 40, 40);
     doc.text("Amount in words:", M, y);
-    doc.setFont("helvetica", "normal").setTextColor(60, 60, 60);
+    doc.setFont(FONT, "normal").setTextColor(60, 60, 60);
     doc.text(words, M + 90, y);
     y += Math.max(1, words.length) * 11 + 4;
   }
@@ -205,10 +210,10 @@ export async function renderReconstructed(def: TemplateDef, inputs: DocInputs): 
     ensure(8 + 38 + 8); y += 8;
     const adv = num(inputs.advance_amount), bal = round2(totalsCalc.grandTotal - adv);
     doc.setDrawColor(...C).setLineWidth(0.8).rect(M, y, W - 2 * M, 38);
-    doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(40, 40, 40);
+    doc.setFont(FONT, "bold").setFontSize(9).setTextColor(40, 40, 40);
     doc.text(`ADVANCE${inputs.advance_date ? " (" + fmtDate(inputs.advance_date) + ")" : ""} : ${rupees(adv)}`, M + 8, y + 15);
     doc.text(`Balance : ${rupees(bal)}`, M + 8, y + 31);
-    doc.setFont("helvetica", "normal").setFontSize(7.6).setTextColor(90, 90, 90);
+    doc.setFont(FONT, "normal").setFontSize(7.6).setTextColor(90, 90, 90);
     doc.text(rupeesInWords(bal), W - M - 8, y + 31, { align: "right" });
     y += 46;
   }
@@ -229,17 +234,17 @@ export async function renderReconstructed(def: TemplateDef, inputs: DocInputs): 
       doc.setDrawColor(170, 170, 170).setLineWidth(0.6).rect(M, y, boxW, boxH);
       let bky = y + 14;
       for (const [label, val] of bankRows) {
-        doc.setFont("helvetica", "bold").setFontSize(7.6).setTextColor(40, 40, 40);
+        doc.setFont(FONT, "bold").setFontSize(7.6).setTextColor(40, 40, 40);
         doc.text(label, M + 6, bky);
-        doc.setFont("helvetica", "normal").setTextColor(60, 60, 60);
+        doc.setFont(FONT, "normal").setTextColor(60, 60, 60);
         doc.text(s(val), M + boxW * 0.45, bky);
         bky += 15;
       }
     }
     if (def.signature) {
-      doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(40, 40, 40);
+      doc.setFont(FONT, "bold").setFontSize(9).setTextColor(40, 40, 40);
       doc.text(`For ${company.name.toUpperCase()}`, W - M - 6, y + 14, { align: "right" });
-      doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(120, 120, 120);
+      doc.setFont(FONT, "normal").setFontSize(8).setTextColor(120, 120, 120);
       doc.text("(Authorised Signatory)", W - M - 6, y + boxH - 4, { align: "right" });
     }
     y += boxH + 12;
@@ -253,9 +258,9 @@ export async function renderReconstructed(def: TemplateDef, inputs: DocInputs): 
       // Keep the heading with at least the first note line so it never dangles
       // alone at the bottom of a page.
       ensure(12 + 9 + 4);
-      doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(...C);
+      doc.setFont(FONT, "bold").setFontSize(8.5).setTextColor(...C);
       doc.text(def.notesHeading || "Notes:", M, y); y += 12;
-      doc.setFont("helvetica", "normal").setFontSize(7.4).setTextColor(70, 70, 70);
+      doc.setFont(FONT, "normal").setFontSize(7.4).setTextColor(70, 70, 70);
       list.forEach((t: string) => {
         const lines = doc.splitTextToSize(t, W - 2 * M);
         ensure(lines.length * 9 + 4);

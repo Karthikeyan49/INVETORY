@@ -78,9 +78,11 @@ class MachineIssue
                 !empty($data['reported_by']) ? (int)$data['reported_by'] : null,
             ]
         );
-        // Take the machine out of available stock while the issue is open.
+        // Take the machine out of available stock while the issue is open —
+        // remembering the status it had so it can be restored on resolution
+        // (a delivered/sold machine must NOT come back as available 'in_stock').
         if ($status !== 'resolved') {
-            self::setMachineStatus((int)$data['machine_id'], 'maintenance');
+            self::rememberStatusThenMaintenance((int)$data['machine_id']);
         }
         self::logMovement((int)$data['machine_id'], 'Issue reported: ' . trim((string)$data['title']), $data['reported_by'] ?? null);
         return $id;
@@ -182,8 +184,10 @@ class MachineIssue
 
     /**
      * Reconcile a machine's status with its issues: 'maintenance' while any
-     * issue is unresolved, else 'in_stock' (unless it has already moved on to
-     * reserved/on_delivery/delivered — those are never overridden).
+     * issue is unresolved, else restore the status it held before the issue was
+     * opened (falling back to 'in_stock'). Restoring — rather than hardcoding
+     * 'in_stock' — keeps a delivered/sold machine from being wrongly returned to
+     * available stock the moment its issue is resolved.
      */
     private static function syncMachine(int $machineId): void
     {
@@ -191,17 +195,34 @@ class MachineIssue
             "SELECT COUNT(*) AS cnt FROM machine_issues WHERE machine_id = ? AND status <> 'resolved'",
             [$machineId]
         );
-        $current = Database::fetch("SELECT status FROM machines WHERE id = ? LIMIT 1", [$machineId]);
+        $current = Database::fetch("SELECT status, previous_status FROM machines WHERE id = ? LIMIT 1", [$machineId]);
         if (!$current) {
             return;
         }
         if ($open > 0) {
             if ($current['status'] === 'in_stock') {
-                self::setMachineStatus($machineId, 'maintenance');
+                self::rememberStatusThenMaintenance($machineId);
             }
         } elseif ($current['status'] === 'maintenance') {
-            self::setMachineStatus($machineId, 'in_stock');
+            $prev = (string)($current['previous_status'] ?? '');
+            $restore = (in_array($prev, Machine::STATUSES, true) && $prev !== 'maintenance') ? $prev : 'in_stock';
+            self::setMachineStatus($machineId, $restore);
+            Database::execute("UPDATE machines SET previous_status = NULL WHERE id = ?", [$machineId]);
         }
+    }
+
+    /**
+     * Move a machine into 'maintenance', first stashing its current status into
+     * previous_status so syncMachine() can restore it later. No-op capture when
+     * the machine is already in maintenance (keeps the earlier stashed value).
+     */
+    private static function rememberStatusThenMaintenance(int $machineId): void
+    {
+        $cur = Database::fetch("SELECT status FROM machines WHERE id = ? LIMIT 1", [$machineId]);
+        if ($cur && $cur['status'] !== 'maintenance') {
+            Database::execute("UPDATE machines SET previous_status = ? WHERE id = ?", [$cur['status'], $machineId]);
+        }
+        self::setMachineStatus($machineId, 'maintenance');
     }
 
     private static function setMachineStatus(int $machineId, string $status): void

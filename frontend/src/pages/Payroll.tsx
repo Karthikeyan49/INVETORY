@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { StatCard } from "@/components/StatCard";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { payrollApi, workingDaysInMonth, type Payslip, type PayrollAiCheck } from "@/lib/api/hr";
+import { payrollApi, workingDaysInMonth, type Payslip } from "@/lib/api/hr";
 import { exportToPdf, exportToExcel, type ExportColumn } from "@/lib/exporters";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -69,21 +69,6 @@ export default function Payroll() {
   const [slips, setSlips]             = useState<Payslip[]>([]);
   const [loading, setLoading]         = useState(false);
   const [view, setView]               = useState<Payslip | null>(null);
-  const [aiCheck, setAiCheck]         = useState<PayrollAiCheck | null>(null);
-  const [aiBusy, setAiBusy]           = useState(false);
-
-  const runAiCheck = async () => {
-    if (!slips.length) return toast.error("Generate payroll for this month first");
-    setAiBusy(true);
-    try {
-      const res = await payrollApi.aiCheck(month);
-      setAiCheck(res);
-      if (res.flagged === 0) toast.success("AI check passed — nothing unusual");
-      else toast.warning(`${res.flagged} row${res.flagged === 1 ? "" : "s"} flagged for review`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "AI check failed");
-    } finally { setAiBusy(false); }
-  };
 
   const handleMonthChange = (m: string) => {
     const wd = workingDaysInMonth(m);
@@ -303,9 +288,6 @@ export default function Payroll() {
               />
             </div>
             <Button variant="outline" onClick={rerun}><Calculator className="h-4 w-4" /> Save / Re-run</Button>
-            <Button variant="outline" onClick={runAiCheck} disabled={aiBusy || !slips.length}>
-              {aiBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} AI Pre-run Check
-            </Button>
             <Button variant="outline" onClick={exportXlsx}><FileDown className="h-4 w-4" /> Excel</Button>
             <Button onClick={exportPdf}><FileDown className="h-4 w-4" /> Register PDF</Button>
           </div>
@@ -317,53 +299,6 @@ export default function Payroll() {
         <StatCard title="Gross Payable" value={inr(stats.gross)} subtitle="total salary before deductions" icon={Wallet} />
         <StatCard title="Net Payout" value={inr(stats.total)} subtitle={`Deductions ${inr(stats.ded)}`} icon={TrendingUp} />
       </div>
-
-      {aiCheck && (
-        <div className="rounded-xl border bg-card shadow-sm">
-          <div className="flex items-center justify-between border-b px-4 py-3">
-            <div className="flex items-center gap-2 font-semibold text-card-foreground">
-              {aiCheck.flagged === 0
-                ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                : <ShieldAlert className="h-4 w-4 text-amber-600" />}
-              AI Pre-run Check
-              <span className="text-xs font-normal text-muted-foreground">
-                {aiCheck.checked} rows · {aiCheck.flagged} flagged{aiCheck.high ? ` · ${aiCheck.high} high` : ""}
-              </span>
-            </div>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setAiCheck(null)}><X className="h-4 w-4" /></Button>
-          </div>
-          <div className="p-4 space-y-3">
-            {aiCheck.overall && <p className="text-sm text-muted-foreground">{aiCheck.overall}</p>}
-            {aiCheck.flagged === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-emerald-600">
-                <CheckCircle2 className="h-4 w-4" /> No anomalies — payroll looks consistent with history. Safe to process.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {aiCheck.flags.map((f, i) => {
-                  const tone = f.severity === "high" ? "border-red-300 bg-red-50" : f.severity === "medium" ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-slate-50";
-                  const chip = f.severity === "high" ? "bg-red-100 text-red-700" : f.severity === "medium" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600";
-                  return (
-                    <div key={i} className={cn("flex gap-3 rounded-lg border p-3", tone)}>
-                      <AlertTriangle className={cn("mt-0.5 h-4 w-4 shrink-0", f.severity === "high" ? "text-red-600" : f.severity === "medium" ? "text-amber-600" : "text-slate-500")} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium text-sm">{f.employee_name || f.employee_key}</span>
-                          <span className="font-mono text-xs text-muted-foreground">{f.employee_key}</span>
-                          <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase", chip)}>{f.severity}</span>
-                          {f.issue && <span className="text-xs font-medium text-foreground">{f.issue}</span>}
-                        </div>
-                        {f.detail && <p className="mt-0.5 text-sm text-muted-foreground">{f.detail}</p>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <p className="text-[11px] text-muted-foreground">AI-generated from payroll figures vs each employee's history · {aiCheck.generated_at} · review before processing.</p>
-          </div>
-        </div>
-      )}
 
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
         <ScrollableX>

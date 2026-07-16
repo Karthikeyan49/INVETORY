@@ -81,14 +81,13 @@ PROMPT;
         try {
             $checks['products_count']  = (int) Database::fetch("SELECT COUNT(*) AS cnt FROM products")['cnt'];
             $checks['employees_count'] = (int) Database::fetch("SELECT COUNT(*) AS cnt FROM employees")['cnt'];
-            $checks['faqs_count']      = (int) Database::fetch("SELECT COUNT(*) AS cnt FROM faqs")['cnt'];
             $checks['chat_sessions_table'] = 'OK';
         } catch (\Throwable $e) {
             $checks['db_error'] = $e->getMessage();
         }
 
         // 5. Test each data source individually
-        $sources = ['summary', 'products', 'faqs', 'employees', 'orders'];
+        $sources = ['summary', 'products', 'employees', 'orders'];
         foreach ($sources as $src) {
             try {
                 $result = DataBridge::fetchSource($src);

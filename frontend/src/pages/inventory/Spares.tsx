@@ -7,7 +7,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, Trash2, AlertTriangle, ArrowDownUp, PackageSearch, Boxes } from "lucide-react";
+import { Plus, Minus, Search, Pencil, Trash2, AlertTriangle, ArrowDownUp, PackageSearch, Boxes } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Combobox } from "@/components/ui/combobox";
 import {
   fetchSpares, createSpare, updateSpare, deleteSpare, moveSpare, fetchSpareForecast,
-  SPARE_REASONS, type Spare, type SpareInput, type SpareReason, type SpareForecast,
+  type Spare, type SpareInput, type SpareReason, type SpareForecast,
 } from "@/lib/api/spares";
 import { fetchMachines, type Machine } from "@/lib/api/machines";
 
@@ -66,6 +66,7 @@ export default function Spares() {
   const [saving, setSaving] = useState(false);
 
   const [moveFor, setMoveFor] = useState<Spare | null>(null);
+  const [stockDir, setStockDir] = useState<"add" | "reduce">("add");
   const [moveForm, setMoveForm] = useState<{ qty: string; reason: SpareReason; machine_id: string; note: string }>({
     qty: "", reason: "receive", machine_id: "", note: "",
   });
@@ -131,19 +132,25 @@ export default function Spares() {
     catch (e) { toast.error(e instanceof Error ? e.message : "Could not delete"); }
   }
 
-  function openMove(s: Spare) {
+  // "+" — add stock (receive).
+  function openReceive(s: Spare) {
+    setStockDir("add");
     setMoveFor(s);
     setMoveForm({ qty: "", reason: "receive", machine_id: "", note: "" });
   }
-  // Quick "+" — jump straight to receiving stock for this spare.
-  function openReceive(s: Spare) {
+  // "−" — reduce stock (consume by default; can switch to issue).
+  function openReduce(s: Spare) {
+    setStockDir("reduce");
     setMoveFor(s);
-    setMoveForm({ qty: "", reason: "receive", machine_id: "", note: "" });
+    setMoveForm({ qty: "", reason: "consume", machine_id: "", note: "" });
   }
   async function confirmMove() {
     if (!moveFor) return;
     const qty = Number(moveForm.qty);
     if (!qty || qty <= 0) { toast.error("Enter a quantity"); return; }
+    if (stockDir === "reduce" && qty > moveFor.quantity) {
+      toast.error(`Only ${moveFor.quantity} ${moveFor.unit ?? ""} in stock`); return;
+    }
     try {
       await moveSpare(moveFor.id, {
         qty, reason: moveForm.reason,
@@ -230,8 +237,8 @@ export default function Spares() {
                     <td className="px-2 py-2">{s.location || "—"}</td>
                     <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
-                        <Button size="icon" variant="outline" className="h-7 w-7 text-primary" onClick={() => openReceive(s)} title="Add quantity (receive stock)"><Plus className="h-4 w-4" /></Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => openMove(s)}>Move</Button>
+                        <Button size="icon" variant="outline" className="h-7 w-7 text-green-600" onClick={() => openReceive(s)} title="Add quantity"><Plus className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="outline" className="h-7 w-7 text-amber-600" disabled={s.quantity <= 0} onClick={() => openReduce(s)} title="Reduce quantity"><Minus className="h-4 w-4" /></Button>
                         <button className="text-muted-foreground hover:text-foreground" onClick={() => openEdit(s)} title="Edit"><Pencil className="h-4 w-4" /></button>
                         <button className="text-red-500 hover:text-red-700" onClick={() => handleDelete(s)} title="Delete"><Trash2 className="h-4 w-4" /></button>
                       </div>
@@ -312,7 +319,7 @@ export default function Spares() {
                 <Input type="number" value={form.reorder_level ?? 0} onChange={(e) => setForm({ ...form, reorder_level: Number(e.target.value) })} />
               </div>
             </div>
-            {editingId && <p className="text-xs text-muted-foreground">Use “Move” to receive or consume stock — it keeps the consumption history for forecasting.</p>}
+            {editingId && <p className="text-xs text-muted-foreground">Use the “+” / “−” buttons on the row to add or reduce stock — it keeps the consumption history for forecasting.</p>}
             <div>
               <label className="text-xs text-muted-foreground">Notes</label>
               <Textarea rows={2} value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
@@ -325,25 +332,37 @@ export default function Spares() {
         </DialogContent>
       </Dialog>
 
-      {/* Move stock dialog */}
+      {/* Add / reduce stock dialog */}
       <Dialog open={!!moveFor} onOpenChange={(o) => !o && setMoveFor(null)}>
         <DialogContent className="max-w-xl">
-          <DialogHeader><DialogTitle>Move stock — {moveFor?.name}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {stockDir === "add"
+                ? <><Plus className="h-4 w-4 text-green-600" /> Add stock — {moveFor?.name}</>
+                : <><Minus className="h-4 w-4 text-amber-600" /> Reduce stock — {moveFor?.name}</>}
+            </DialogTitle>
+          </DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground">Reason</label>
-                <Select value={moveForm.reason} onValueChange={(v) => setMoveForm({ ...moveForm, reason: v as SpareReason })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{SPARE_REASONS.map((r) => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}</SelectContent>
-                </Select>
+                <label className="text-xs text-muted-foreground">Quantity to {stockDir === "add" ? "add" : "reduce"} *</label>
+                <Input type="number" min="1" autoFocus value={moveForm.qty}
+                       onChange={(e) => setMoveForm({ ...moveForm, qty: e.target.value })} />
               </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Quantity</label>
-                <Input type="number" min="1" value={moveForm.qty} onChange={(e) => setMoveForm({ ...moveForm, qty: e.target.value })} />
-              </div>
+              {stockDir === "reduce" && (
+                <div>
+                  <label className="text-xs text-muted-foreground">Reason</label>
+                  <Select value={moveForm.reason} onValueChange={(v) => setMoveForm({ ...moveForm, reason: v as SpareReason })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="consume" className="capitalize">consume</SelectItem>
+                      <SelectItem value="issue" className="capitalize">issue</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
-            {(moveForm.reason === "consume" || moveForm.reason === "issue") && (
+            {stockDir === "reduce" && (
               <div>
                 <label className="text-xs text-muted-foreground">Fitted to machine (optional)</label>
                 <Select value={moveForm.machine_id} onValueChange={(v) => setMoveForm({ ...moveForm, machine_id: v })}>
@@ -357,12 +376,17 @@ export default function Spares() {
               <Input value={moveForm.note} onChange={(e) => setMoveForm({ ...moveForm, note: e.target.value })} />
             </div>
             <p className="text-xs text-muted-foreground">
-              {moveForm.reason === "receive" || moveForm.reason === "adjust" ? "Adds to" : "Removes from"} stock (current {moveFor?.quantity} {moveFor?.unit}).
+              {stockDir === "add" ? "Adds to" : "Removes from"} stock — current {moveFor?.quantity} {moveFor?.unit}
+              {moveForm.qty && Number(moveForm.qty) > 0 && (
+                <> → new {stockDir === "add"
+                  ? (moveFor?.quantity ?? 0) + Number(moveForm.qty)
+                  : (moveFor?.quantity ?? 0) - Number(moveForm.qty)} {moveFor?.unit}</>
+              )}.
             </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setMoveFor(null)}>Cancel</Button>
-            <Button onClick={confirmMove}>Apply</Button>
+            <Button onClick={confirmMove}>{stockDir === "add" ? "Add" : "Reduce"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -390,7 +414,7 @@ export default function Spares() {
               {infoFor.notes && <div className="border-t pt-3 text-sm"><span className="text-muted-foreground">Notes</span><div>{infoFor.notes}</div></div>}
               <DialogFooter>
                 <Button variant="outline" onClick={() => { const s = infoFor; setInfoFor(null); openReceive(s); }} className="gap-1"><Plus className="h-4 w-4" /> Add quantity</Button>
-                <Button variant="outline" onClick={() => { const s = infoFor; setInfoFor(null); openMove(s); }}>Move</Button>
+                <Button variant="outline" disabled={infoFor.quantity <= 0} onClick={() => { const s = infoFor; setInfoFor(null); openReduce(s); }} className="gap-1"><Minus className="h-4 w-4" /> Reduce quantity</Button>
                 <Button variant="outline" onClick={() => { const s = infoFor; setInfoFor(null); openEdit(s); }}>Edit</Button>
                 <Button onClick={() => setInfoFor(null)}>Close</Button>
               </DialogFooter>

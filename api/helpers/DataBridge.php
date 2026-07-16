@@ -66,28 +66,10 @@ class DataBridge
         'revenue'    => ['finance'],
         'profit'     => ['finance'],
         'income'     => ['finance'],
-        // Knowledge / Policies
-        'faq'        => ['faqs'],
-        'help'       => ['faqs'],
-        'sop'        => ['sops'],
-        'procedure'  => ['sops'],
-        'process'    => ['sops'],
-        'policy'     => ['sops', 'faqs'],
-        'guideline'  => ['sops'],
-        'warranty'   => ['faqs', 'sops'],
-        'return'     => ['faqs'],
-        'refund'     => ['faqs'],
         // Operations
-        'meeting'    => ['meetings'],
-        'schedule'   => ['meetings'],
-        'task'       => ['tasks'],
-        'pending'    => ['tasks', 'orders'],
-        'workflow'   => ['workflows'],
+        'pending'    => ['orders'],
         'query'      => ['queries'],
         'complaint'  => ['queries'],
-        'quote'      => ['quotes'],
-        'quotation'  => ['quotes'],
-        'enquiry'    => ['quotes'],
     ];
 
     /**
@@ -133,14 +115,8 @@ class DataBridge
                 'invoices'  => self::invoices(),
                 'expenses'  => self::expenses(),
                 'finance'   => self::finance(),
-                'faqs'      => self::faqs(),
-                'sops'      => self::sops(),
-                'meetings'  => self::meetings(),
-                'tasks'     => self::tasks(),
-                'workflows' => self::workflows(),
                 'queries'   => self::customerQueries(),
-                'quotes'    => self::quotes(),
-                default     => '',
+                default     => '', // faqs/sops/meetings/tasks/workflows/quotes modules removed
             };
         } catch (\Throwable $e) {
             error_log("[DataBridge] $source error: " . $e->getMessage());

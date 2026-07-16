@@ -3,12 +3,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   TrendingUp, TrendingDown, Wallet, PiggyBank, Receipt, Activity,
   Percent, Scale, Target, Layers, Sparkles, Lightbulb, ShieldAlert, CheckCircle2, RefreshCw, Loader2,
-  Boxes, AlertTriangle,
+  Boxes,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/StatCard";
 import { financeApi, type FinancialRatios } from "@/lib/api/finance";
-import { getInventoryValuation, getDamagedStockWriteoff } from "@/lib/api/inventory";
+import { fetchMachines } from "@/lib/api/machines";
+import { fetchSpares } from "@/lib/api/spares";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -48,12 +49,14 @@ const RATIO_DEFS: RatioMeta[] = [
 export default function Finance() {
   const { data: pnl, isLoading: pnlLoading, error: pnlErr } = useQuery({ queryKey: ["finance", "pnl"], queryFn: () => financeApi.pnl() });
   const { data: ratios, isLoading: ratiosLoading, error: ratiosErr } = useQuery({ queryKey: ["finance", "ratios"], queryFn: () => financeApi.ratios() });
-  const { data: invValuation } = useQuery({ queryKey: ["inventory", "valuation"], queryFn: getInventoryValuation });
-  const { data: damagedStock } = useQuery({ queryKey: ["inventory", "damaged-writeoff"], queryFn: getDamagedStockWriteoff });
-  const ai = useMutation({
-    mutationFn: () => financeApi.aiAnalysis(),
-    onError: (e) => toast.error(e instanceof Error ? e.message : "AI analysis failed"),
-  });
+  // Inventory value is sourced from the pages we keep: in-stock Machines (buy price) + Spares (unit cost × qty).
+  const { data: machinesData } = useQuery({ queryKey: ["finance", "machines-value"], queryFn: () => fetchMachines({ limit: 1000 }) });
+  const { data: sparesData } = useQuery({ queryKey: ["finance", "spares-value"], queryFn: () => fetchSpares() });
+  const inStockMachines = (machinesData?.rows ?? []).filter((m) => m.status !== "delivered");
+  const machinesValue = inStockMachines.reduce((s, m) => s + (Number(m.buy_price) || 0), 0);
+  const spareRows = sparesData?.rows ?? [];
+  const sparesValue = spareRows.reduce((s, sp) => s + (Number(sp.unit_cost) || 0) * (Number(sp.quantity) || 0), 0);
+  const inventoryTotalValue = machinesValue + sparesValue;
 
   useEffect(() => {
     const e = pnlErr || ratiosErr;
@@ -88,35 +91,22 @@ export default function Finance() {
         />
       </div>
 
-      {/* Inventory Valuation */}
+      {/* Inventory Valuation — Machines + Spares */}
       <div className="bg-card rounded-xl border p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-semibold text-card-foreground">Inventory Valuation</h3>
-            <p className="text-xs text-muted-foreground">Smart Inventory stock value snapshot</p>
+            <p className="text-xs text-muted-foreground">Stock value from machines &amp; spares</p>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="flex items-center gap-3 p-4 rounded-lg border bg-secondary/30">
             <div className="p-2 bg-primary/10 rounded-lg">
               <Boxes className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total Inventory Value</p>
-              <p className="font-semibold text-card-foreground">
-                {invValuation ? inr(invValuation.total_value) : "—"}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-4 rounded-lg border bg-secondary/30">
-            <div className="p-2 bg-destructive/10 rounded-lg">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Damaged Stock Value</p>
-              <p className="font-semibold text-card-foreground">
-                {damagedStock ? inr(damagedStock.total_value) : "—"}
-              </p>
+              <p className="text-xs text-muted-foreground">Machines ({inStockMachines.length} in stock)</p>
+              <p className="font-semibold text-card-foreground">{inr(machinesValue)}</p>
             </div>
           </div>
           <div className="flex items-center gap-3 p-4 rounded-lg border bg-secondary/30">
@@ -124,106 +114,21 @@ export default function Finance() {
               <Layers className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Damaged Stock Quantity</p>
-              <p className="font-semibold text-card-foreground">
-                {damagedStock ? damagedStock.total_quantity : "—"}
-              </p>
+              <p className="text-xs text-muted-foreground">Spares ({spareRows.length} items)</p>
+              <p className="font-semibold text-card-foreground">{inr(sparesValue)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 p-4 rounded-lg border bg-primary/5">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Wallet className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Inventory Value</p>
+              <p className="font-semibold text-card-foreground">{inr(inventoryTotalValue)}</p>
             </div>
           </div>
         </div>
-        {invValuation && invValuation.by_zone.length > 0 && (
-          <div>
-            <h4 className="text-sm font-semibold text-foreground mb-2">Value by Zone</h4>
-            <div className="border rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-muted-foreground">
-                  <tr>
-                    <th className="text-left px-3 py-2 font-medium">Zone</th>
-                    <th className="text-left px-3 py-2 font-medium">Type</th>
-                    <th className="text-right px-3 py-2 font-medium">Quantity</th>
-                    <th className="text-right px-3 py-2 font-medium">Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invValuation.by_zone.map((zone) => (
-                    <tr key={zone.zone_id} className="border-t">
-                      <td className="px-3 py-2">
-                        <div className="font-medium">{zone.zone_name}</div>
-                        <div className="text-xs text-muted-foreground">{zone.zone_code}</div>
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">{zone.zone_type}</td>
-                      <td className="px-3 py-2 text-right">{zone.total_quantity}</td>
-                      <td className="px-3 py-2 text-right">{inr(zone.stock_value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
       </div>
-      {/* AI Financial Analyst */}
-      {(() => {
-        const a = ai.data;
-        const score = a?.health_score ?? 0;
-        const scoreTone = score >= 70 ? "text-emerald-600" : score >= 45 ? "text-amber-600" : "text-red-600";
-        const scoreRing = score >= 70 ? "border-emerald-500" : score >= 45 ? "border-amber-500" : "border-red-500";
-        return (
-          <div className="rounded-xl border bg-card shadow-sm">
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <div className="flex items-center gap-2 font-semibold text-card-foreground">
-                <Sparkles className="h-4 w-4 text-primary" /> AI Financial Analyst
-              </div>
-              <Button size="sm" variant={a ? "outline" : "default"} disabled={ai.isPending} onClick={() => ai.mutate()} className="gap-1.5">
-                {ai.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : a ? <RefreshCw className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-                {ai.isPending ? "Analysing…" : a ? "Re-analyse" : "Analyse this period"}
-              </Button>
-            </div>
-
-            {!a && !ai.isPending && (
-              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                Get a plain-language read of this period — health score, what's driving profit, risks and recommendations.
-                <br />Built from the exact figures above. Only aggregated totals are sent to the AI.
-              </div>
-            )}
-            {ai.isPending && (
-              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin" /> Reading your numbers…
-              </div>
-            )}
-
-            {a && (
-              <div className="p-4 space-y-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <div className={cn("flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-full border-4", scoreRing)}>
-                    <span className={cn("text-xl font-bold leading-none", scoreTone)}>{score}</span>
-                    <span className="text-[9px] text-muted-foreground">health</span>
-                  </div>
-                  <div className="min-w-0">
-                    {a.headline && <p className="font-semibold text-card-foreground">{a.headline}</p>}
-                    {a.summary && <p className="text-sm text-muted-foreground">{a.summary}</p>}
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <AiList title="Drivers" icon={TrendingUp} tone="text-blue-600" items={a.drivers} />
-                  <AiList title="Risks" icon={ShieldAlert} tone="text-red-600" items={a.risks} />
-                  <AiList title="Recommendations" icon={Lightbulb} tone="text-emerald-600" items={a.recommendations} />
-                </div>
-
-                {a.outlook && (
-                  <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-sm">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                    <span><span className="font-medium">Outlook: </span>{a.outlook}</span>
-                  </div>
-                )}
-                <p className="text-[11px] text-muted-foreground">AI-generated from your figures · {a.generated_at} · verify before acting.</p>
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
       {/* Revenue vs Expenses area + Pie */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-card rounded-xl border p-6 shadow-sm">
@@ -340,19 +245,6 @@ export default function Finance() {
           })}
         </div>
       </div>
-    </div>
-  );
-}
-
-function AiList({ title, icon: Icon, tone, items }: { title: string; icon: typeof Percent; tone: string; items: string[] }) {
-  return (
-    <div className="rounded-lg border p-3">
-      <div className={cn("mb-2 flex items-center gap-1.5 text-sm font-medium", tone)}><Icon className="h-4 w-4" /> {title}</div>
-      {items && items.length > 0 ? (
-        <ul className="space-y-1.5 text-sm text-muted-foreground">
-          {items.map((t, i) => <li key={i} className="flex gap-1.5"><span className="text-muted-foreground/50">•</span><span>{t}</span></li>)}
-        </ul>
-      ) : <p className="text-sm text-muted-foreground/60">—</p>}
     </div>
   );
 }

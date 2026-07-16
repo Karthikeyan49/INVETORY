@@ -4,16 +4,16 @@
  * report seeds follow-ups (leads) from prospect lines, connecting field visits
  * → leads. The report can be downloaded as the F-SVS-01 PDF.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, type ChangeEvent } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, FileDown, CheckCircle2, ClipboardList, Eye } from "lucide-react";
+import { Plus, Trash2, FileDown, CheckCircle2, ClipboardList, Eye, FileUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
-  fetchDcrs, createDcr, approveDcr, deleteDcr, getDcr,
+  fetchDcrs, createDcr, approveDcr, deleteDcr, getDcr, extractDcrFromPdf,
   type Dcr, type DcrLine, type DcrInput,
 } from "@/lib/api/dcr";
 import { downloadDcrPdf } from "@/lib/dcrPdf";
@@ -39,6 +39,8 @@ export default function Dcr() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [lines, setLines] = useState<DcrLine[]>([blankLine()]);
   const [saving, setSaving] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const [detail, setDetail] = useState<Dcr | null>(null);
 
@@ -51,10 +53,16 @@ export default function Dcr() {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [statusFilter, search]);
 
-  useEffect(() => { load(); }, [load]);
+  // statusFilter changes load immediately; search is debounced so we don't
+  // fire a request on every keystroke.
+  useEffect(() => { load(); }, [statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const t = setTimeout(() => load(), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
   useEffect(() => { employeesApi.list().then(setEmployees).catch(() => {}); }, []);
 
   function openAdd() {
@@ -70,6 +78,61 @@ export default function Dcr() {
 
   function setLine(idx: number, patch: Partial<DcrLine>) {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+  }
+
+  // Upload a DCR PDF → auto-extract header + visit lines and pre-fill the form.
+  // The manual path is untouched: this only populates the same fields the user
+  // then reviews / edits and saves via the normal create flow.
+  async function handleExtractPdf(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    if (file.type && file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast.error("Please choose a PDF file");
+      return;
+    }
+    setExtracting(true);
+    const tid = toast.loading("Extracting DCR from PDF…");
+    try {
+      const { header, lines: extLines } = await extractDcrFromPdf(file);
+      const empName = header.employee_name?.trim() || "";
+      const matched = empName
+        ? employees.find((x) => (x.name ?? "").trim().toLowerCase() === empName.toLowerCase())
+        : undefined;
+      setForm((f) => ({
+        ...f,
+        employee_name: empName || f.employee_name,
+        employee_id: matched ? String(matched.employee_id ?? matched.id) : f.employee_id,
+        report_date: header.report_date || f.report_date,
+        area: (header.area ?? "").trim() || f.area,
+        opening_km: header.opening_km ? String(header.opening_km) : f.opening_km,
+        closing_km: header.closing_km ? String(header.closing_km) : f.closing_km,
+        notes: (header.notes ?? "").trim() || f.notes,
+      }));
+      const mapped: DcrLine[] = (extLines ?? [])
+        .map((l) => ({
+          ...blankLine(),
+          customer: (l.customer ?? "").toString(),
+          address: (l.address ?? "").toString(),
+          mobile: (l.mobile ?? "").toString(),
+          model: (l.model ?? "").toString(),
+          cust_status: (l.cust_status || "new").toString(),
+          cust_type: (l.cust_type || "customer").toString(),
+          category: (l.category ?? "").toString(),
+          stamping: (l.stamping ?? "").toString(),
+          service: (l.service ?? "").toString(),
+          payment: (l.payment ?? "").toString(),
+          remarks: (l.remarks ?? "").toString(),
+          staff_sign: (l.staff_sign ?? "").toString(),
+        }))
+        .filter((l) => l.customer.trim() || (l.mobile ?? "").trim());
+      setLines(mapped.length ? mapped : [blankLine()]);
+      toast.success(`Imported ${mapped.length} visit line(s) — review and Save`, { id: tid });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not extract PDF", { id: tid });
+    } finally {
+      setExtracting(false);
+    }
   }
 
   async function handleSave() {
@@ -136,12 +199,11 @@ export default function Dcr() {
       </div>
 
       <div className="flex gap-2 flex-wrap items-center">
-        <Input placeholder="Search employee / area / no" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} className="w-64" />
+        <Input placeholder="Search employee / area / no" value={search} onChange={(e) => setSearch(e.target.value)} className="w-64" />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="submitted">Submitted</SelectItem><SelectItem value="approved">Approved</SelectItem></SelectContent>
         </Select>
-        <Button variant="outline" onClick={load}>Search</Button>
       </div>
 
       <div className="border rounded-lg overflow-x-auto">
@@ -185,6 +247,28 @@ export default function Dcr() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Daily Call Report</DialogTitle></DialogHeader>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed bg-muted/30 px-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              Have the printed DCR? Upload the PDF to auto-fill the header and visit lines — then review and Save.
+            </p>
+            <input
+              ref={pdfInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={handleExtractPdf}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1 shrink-0"
+              disabled={extracting}
+              onClick={() => pdfInputRef.current?.click()}
+            >
+              <FileUp className="h-4 w-4" /> {extracting ? "Extracting…" : "Upload DCR PDF"}
+            </Button>
+          </div>
           <div className="space-y-3">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>

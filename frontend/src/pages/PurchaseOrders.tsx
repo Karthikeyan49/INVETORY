@@ -9,7 +9,7 @@
  * NOTE: layout is provisional — the reference photo promised for this register
  * has not been supplied; refine when it lands (see REQUIREMENTS_SET3.md §5).
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, FileSpreadsheet, FileDown, Wallet, CheckCircle2, PackageCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Combobox } from "@/components/ui/combobox";
 import PaymentLedger from "@/components/PaymentLedger";
 import { exportToExcel, exportToPdf } from "@/lib/exporters";
 import {
@@ -70,6 +71,14 @@ export default function PurchaseOrders() {
 
   const [rows, setRows] = useState<PurchaseOrder[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const vendorSuggestions = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.vendor_name).filter(Boolean))).sort(),
+    [rows],
+  );
+  const locationSuggestions = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.location).filter((v): v is string => !!v))).sort(),
+    [rows],
+  );
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -101,14 +110,20 @@ export default function PurchaseOrders() {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryFilter, statusFilter]);
+  }, [categoryFilter, statusFilter, search]);
 
   const loadOutstanding = useCallback(async () => {
     try { setOutstanding(await fetchOutstanding()); } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // categoryFilter/statusFilter changes load immediately; search is debounced
+  // so we don't fire a request on every keystroke.
+  useEffect(() => { load(); }, [categoryFilter, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const t = setTimeout(() => load(), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
   useEffect(() => { loadOutstanding(); }, [loadOutstanding]);
 
   function openAdd() {
@@ -326,8 +341,7 @@ export default function PurchaseOrders() {
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap items-center">
-        <Input placeholder="Search vendor / PO no" value={search} onChange={(e) => setSearch(e.target.value)}
-               onKeyDown={(e) => e.key === "Enter" && load()} className="w-56" />
+        <Input placeholder="Search vendor / PO no" value={search} onChange={(e) => setSearch(e.target.value)} className="w-56" />
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
           <SelectTrigger className="w-44"><SelectValue placeholder="Category" /></SelectTrigger>
           <SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
@@ -336,7 +350,6 @@ export default function PurchaseOrders() {
           <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent><SelectItem value="all">All statuses</SelectItem>{PO_STATUSES.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
         </Select>
-        <Button variant="outline" onClick={load}>Search</Button>
       </div>
 
       {/* Table */}
@@ -386,12 +399,11 @@ export default function PurchaseOrders() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground">Vendor name *</label>
-                <Input value={form.vendor_name} onChange={(e) => setForm({ ...form, vendor_name: e.target.value })} />
+                <Combobox options={vendorSuggestions} value={form.vendor_name} onChange={(v) => setForm({ ...form, vendor_name: v })} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Category</label>
-                <Input list="po-cats" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Spares, Machines" />
-                <datalist id="po-cats">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+                <Combobox options={categories} value={form.category} onChange={(v) => setForm({ ...form, category: v })} placeholder="e.g. Spares, Machines" />
               </div>
             </div>
 
@@ -431,7 +443,7 @@ export default function PurchaseOrders() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground">Location</label>
-                <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+                <Combobox options={locationSuggestions} value={form.location} onChange={(v) => setForm({ ...form, location: v })} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Payment category</label>

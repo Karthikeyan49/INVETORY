@@ -131,18 +131,7 @@ class Employee
                 throw new RuntimeException('Employee ID update affected no rows');
             }
 
-            Database::execute('UPDATE tasks SET assignee_id = ? WHERE assignee_id = ?', [$newKey, $currentKey]);
-            Database::execute(
-                'UPDATE workflows SET requester_id = CASE WHEN requester_id = ? THEN ? ELSE requester_id END,
-                                      approver_id = CASE WHEN approver_id = ? THEN ? ELSE approver_id END
-                  WHERE requester_id = ? OR approver_id = ?',
-                [$currentKey, $newKey, $currentKey, $newKey, $currentKey, $currentKey]
-            );
-            Database::execute(
-                'UPDATE workflow_history SET actor_id = ? WHERE actor_id = ?',
-                [$newKey, $currentKey]
-            );
-            self::updateMeetingEmployeeRefs($currentKey, $newKey);
+            // tasks / workflows / meetings modules removed — no cross-refs to update
 
             Database::commit();
             return $newKey;

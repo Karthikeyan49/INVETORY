@@ -4,6 +4,7 @@
  * Off-books "extra" figures are intentionally NOT printed on the challan.
  */
 import { buildDeliveryChallan } from "./srivariScalesPdf";
+import { ensurePdfFonts } from "./pdfFonts";
 import type { DeliveryNote } from "./api/deliveries";
 
 function fmtDate(v: string | null | undefined): string {
@@ -12,7 +13,8 @@ function fmtDate(v: string | null | undefined): string {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : String(v);
 }
 
-export function downloadChallanPdf(c: DeliveryNote): void {
+export async function downloadChallanPdf(c: DeliveryNote): Promise<void> {
+  await ensurePdfFonts();
   const doc = buildDeliveryChallan({
     refNo: c.challan_no,
     date: fmtDate(c.delivery_date),

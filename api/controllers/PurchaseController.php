@@ -63,7 +63,7 @@ class PurchaseController
     public function store(Request $request): void
     {
         $data = $request->only([
-            'vendor_name', 'location', 'purchase_type', 'taxable', 'gst_pct', 'extra_amount',
+            'vendor_name', 'machine_id', 'location', 'purchase_type', 'taxable', 'gst_pct', 'extra_amount',
             'advance', 'payment_method', 'utr_no', 'purchase_date', 'notes',
         ]);
         if (empty($data['vendor_name'])) {
@@ -80,6 +80,16 @@ class PurchaseController
 
         $id = Purchase::create($data);
         $purchase = Purchase::find($id);
+
+        // Real FK back-link: when this purchase records a specific machine buy,
+        // stamp the purchase id onto the machine so buy-price edits can sync and
+        // the link survives note edits (no more free-text-only association).
+        if (!empty($data['machine_id'])) {
+            Database::execute(
+                'UPDATE machines SET purchase_id = ? WHERE id = ?',
+                [$id, (int)$data['machine_id']]
+            );
+        }
 
         // Book it as an expense so it flows into Profit & Loss.
         $this->postExpense($purchase);

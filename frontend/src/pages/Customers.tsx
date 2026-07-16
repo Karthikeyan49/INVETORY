@@ -112,9 +112,11 @@ export default function Customers() {
     setHistoryLoading(true);
     Promise.all([
       fetchCustomerOrders(c.id).catch(() => []),
-      apiFetch<{ data: CustomerInvoiceRow[] }>(`/admin/invoices?customer_name=${encodeURIComponent(c.name)}&limit=10`)
+      // Scope by real customer id (with a name fallback for legacy unlinked rows)
+      // so two customers who share a name don't see each other's history.
+      apiFetch<{ data: CustomerInvoiceRow[] }>(`/admin/invoices?customer_id=${c.id}&customer_name=${encodeURIComponent(c.name)}&limit=10`)
         .then(r => r.data ?? []).catch(() => []),
-      fetchDeliveries({ search: c.name }).then(r => r.rows).catch(() => []),
+      fetchDeliveries({ customer_id: c.id, customer_name: c.name }).then(r => r.rows).catch(() => []),
     ])
       .then(([orders, invoices, deliveries]) => {
         setCustOrders(orders);

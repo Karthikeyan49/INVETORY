@@ -13,8 +13,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify:templates": "vitest run src/test/templates.verify.test.ts",
-    "build:dealer": "vite build --config vite.config.dealer.ts && mv -f dist-dealer/dealer.html dist-dealer/index.html"
+    "verify:templates": "vitest run src/test/templates.verify.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -59,6 +58,7 @@
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
+    "pdfjs-dist": "^4.10.38",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
