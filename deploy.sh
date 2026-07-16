@@ -174,6 +174,16 @@ cat > "$PUBLIC_HTML_DIR/.htaccess" <<'HTACCESS'
 Options -Indexes
 LimitRequestBody 26214400
 
+# Correct MIME types for ES modules / wasm. Hostinger's Apache/LiteSpeed does not
+# map .mjs by default, so the pdf.js worker (pdf.worker.min-*.mjs) is served as
+# octet-stream; combined with the nosniff header below, the browser then refuses
+# to execute it as a module ("Setting up fake worker failed: Failed to fetch
+# dynamically imported module …pdf.worker.min-*.mjs"). Declaring the type fixes it.
+<IfModule mod_mime.c>
+  AddType text/javascript .js .mjs
+  AddType application/wasm .wasm
+</IfModule>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule (^|/)\. - [F,L]
@@ -277,6 +287,13 @@ if [ "$WITH_DEALER" = "1" ]; then
   # the dealer hits the main domain's API cross-origin).
   cat > "$DEALER_PUBLIC_HTML_DIR/.htaccess" <<'HTACCESS'
 Options -Indexes
+
+# ES-module / wasm MIME types (see main-domain .htaccess note) — required so the
+# pdf.js worker .mjs loads as a module under the nosniff header below.
+<IfModule mod_mime.c>
+  AddType text/javascript .js .mjs
+  AddType application/wasm .wasm
+</IfModule>
 
 <IfModule mod_rewrite.c>
   RewriteEngine On

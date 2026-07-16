@@ -85,7 +85,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 ## 3. Pending Work Checklist (priority order — B first, then deepen A)
 
 ### Priority B (specific fixes/features — do first)
-- [ ] B1. Fix pdf.js worker load error — bundle/serve `pdf.worker.min-*.mjs` so PDF view/parse works in prod.
+- [x] B1. Fix pdf.js worker load error — serve `.mjs` with correct MIME so the worker module loads under nosniff. (2026-07-16)
 - [ ] B2. Customer page: button to add customer queries/enquiries + backing store + list.
 - [x] B3. DCR add popup: widen so content fits WITHOUT bottom scrollbar (no inner scroll). (2026-07-16)
 - [x] B4. DCR: add filter by location. (2026-07-16)
@@ -172,6 +172,17 @@ over a static `Database` helper) backend on Hostinger shared hosting.
     column) and returned by `Payroll::format`. Additive — does NOT change earned/net pay.
   - No migration needed: `leave_credit` column pre-exists in schema; setting defaults gracefully.
   - php -l clean (3 files), npm build green.
+
+- **B1 DONE**: pdf.js worker load error.
+  - Root cause: the worker URL resolution is already correct (built as
+    `new URL("pdf.worker.min-*.mjs", import.meta.url)` in `dcrPdfParse.ts`, lazy-loaded). The failure
+    is that Hostinger's Apache/LiteSpeed doesn't map `.mjs` → JS MIME, so the worker is served as
+    octet-stream; the SPA `.htaccess` sends `X-Content-Type-Options: nosniff`, so the browser refuses
+    to run it as a module ⇒ "Setting up fake worker failed: Failed to fetch dynamically imported module".
+  - Fix: added `AddType text/javascript .js .mjs` + `AddType application/wasm .wasm` (mod_mime) to BOTH
+    generated `.htaccess` blocks in `deploy.sh` (admin `public_html` + dealer portal). No frontend code
+    change needed. `bash -n deploy.sh` OK.
+  - **Requires redeploy** via deploy.sh for the fixed `.htaccess` to take effect (cloud run can't deploy).
 
 ## 5. Blocked items
 - **Open PR from `fix/security-hardening` → `main`**: BLOCKED. GitHub returns
