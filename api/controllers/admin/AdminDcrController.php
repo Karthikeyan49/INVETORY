@@ -17,6 +17,7 @@ class AdminDcrController
                 'employee_id' => $request->query('employee_id'),
                 'from'        => $request->query('from'),
                 'to'          => $request->query('to'),
+                'area'        => $request->query('area'),
                 'search'      => $request->query('search'),
             ],
             (int)$request->query('page', 1),
@@ -25,6 +26,12 @@ class AdminDcrController
         Response::paginated($result['rows'], [
             'page' => 1, 'limit' => 100, 'total' => $result['total'], 'total_pages' => 1,
         ]);
+    }
+
+    // GET /admin/dcr/areas — distinct locations for the location filter
+    public function areas(Request $request): void
+    {
+        Response::success(Dcr::distinctAreas());
     }
 
     // GET /admin/dcr/{id}

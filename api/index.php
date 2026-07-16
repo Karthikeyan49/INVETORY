@@ -743,6 +743,7 @@ $router->delete('/admin/incentives/{id}',             [AdminIncentiveController:
 
 // ─── Admin Daily Call Report (R13 / T11) — field visits → leads
 $router->get('/admin/dcr',                            [AdminDcrController::class, 'index'],    'admin');
+$router->get('/admin/dcr/areas',                      [AdminDcrController::class, 'areas'],    'admin');
 $router->post('/admin/dcr',                           [AdminDcrController::class, 'store'],    'admin:owner,accountant,hr,sales');
 $router->post('/admin/dcr/extract',                   [AdminDcrController::class, 'extract'],  'admin:owner,accountant,hr,sales');
 $router->get('/admin/dcr/{id}',                       [AdminDcrController::class, 'show'],     'admin');

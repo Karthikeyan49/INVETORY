@@ -61,8 +61,14 @@ function qs(p: Record<string, string | number | undefined | null>): string {
   return t ? `?${t}` : "";
 }
 
-export async function fetchDcrs(filters: { status?: string; search?: string } = {}): Promise<Dcr[]> {
+export async function fetchDcrs(filters: { status?: string; search?: string; area?: string } = {}): Promise<Dcr[]> {
   const res = await apiFetch<ListResponse>(`/admin/dcr${qs(filters)}`);
+  return res.data ?? [];
+}
+
+/** Distinct locations (areas) across all reports — for the location filter dropdown. */
+export async function fetchDcrAreas(): Promise<string[]> {
+  const res = await apiFetch<{ success: boolean; data: string[] }>(`/admin/dcr/areas`);
   return res.data ?? [];
 }
 

@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
-  fetchDcrs, createDcr, approveDcr, deleteDcr, getDcr, extractDcrFromPdf,
+  fetchDcrs, fetchDcrAreas, createDcr, approveDcr, deleteDcr, getDcr, extractDcrFromPdf,
   type Dcr, type DcrLine, type DcrInput,
 } from "@/lib/api/dcr";
 import { downloadDcrPdf } from "@/lib/dcrPdf";
@@ -33,6 +33,8 @@ export default function Dcr() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
+  const [locations, setLocations] = useState<string[]>([]);
   const [search, setSearch] = useState("");
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -47,23 +49,30 @@ export default function Dcr() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setRows(await fetchDcrs({ status: statusFilter === "all" ? "" : statusFilter, search }));
+      setRows(await fetchDcrs({
+        status: statusFilter === "all" ? "" : statusFilter,
+        area: locationFilter === "all" ? "" : locationFilter,
+        search,
+      }));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load DCRs");
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, search]);
+  }, [statusFilter, locationFilter, search]);
 
-  // statusFilter changes load immediately; search is debounced so we don't
-  // fire a request on every keystroke.
-  useEffect(() => { load(); }, [statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  // statusFilter / locationFilter changes load immediately; search is debounced
+  // so we don't fire a request on every keystroke.
+  useEffect(() => { load(); }, [statusFilter, locationFilter]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const t = setTimeout(() => load(), 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
   useEffect(() => { employeesApi.list().then(setEmployees).catch(() => {}); }, []);
+  // Load distinct locations for the filter; refresh after a save so newly-used areas appear.
+  const loadLocations = useCallback(() => { fetchDcrAreas().then(setLocations).catch(() => {}); }, []);
+  useEffect(() => { loadLocations(); }, [loadLocations]);
 
   function openAdd() {
     setForm(emptyForm);
@@ -155,6 +164,7 @@ export default function Dcr() {
       toast.success("Daily Call Report saved");
       setDialogOpen(false);
       load();
+      loadLocations();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save report");
     } finally {
@@ -204,6 +214,13 @@ export default function Dcr() {
           <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="submitted">Submitted</SelectItem><SelectItem value="approved">Approved</SelectItem></SelectContent>
         </Select>
+        <Select value={locationFilter} onValueChange={setLocationFilter}>
+          <SelectTrigger className="w-48"><SelectValue placeholder="Location" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All locations</SelectItem>
+            {locations.map((loc) => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="border rounded-lg overflow-x-auto">
@@ -245,7 +262,7 @@ export default function Dcr() {
 
       {/* Create dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
+        <DialogContent className="w-[96vw] max-w-7xl max-h-[92vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Daily Call Report</DialogTitle></DialogHeader>
           <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed bg-muted/30 px-3 py-2">
             <p className="text-xs text-muted-foreground">

@@ -87,8 +87,8 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 ### Priority B (specific fixes/features — do first)
 - [ ] B1. Fix pdf.js worker load error — bundle/serve `pdf.worker.min-*.mjs` so PDF view/parse works in prod.
 - [ ] B2. Customer page: button to add customer queries/enquiries + backing store + list.
-- [ ] B3. DCR add popup: widen so content fits WITHOUT bottom scrollbar (no inner scroll).
-- [ ] B4. DCR: add filter by location.
+- [x] B3. DCR add popup: widen so content fits WITHOUT bottom scrollbar (no inner scroll). (2026-07-16)
+- [x] B4. DCR: add filter by location. (2026-07-16)
 - [x] B5. Attendance page: remove 'Attendance Import', 'TMS Status', 'Face Attendance' buttons; bonus = 0. (2026-07-16)
 - [ ] B6. Employee ID card: replace EcoSudar template (front+back) with generalized ID card; remove EcoSudar completely.
 - [ ] B7. Payslip download: fix template; 2 download options → keep only one.
@@ -147,6 +147,17 @@ over a static `Database` helper) backend on Hostinger shared hosting.
     `AdminPayrollController.php`, `Employee.php`, `hr.ts`, and Employees form default + placeholder;
     added idempotent migration `035_attendance_bonus_zero.sql` (column DEFAULT 0 + zero existing rows)
     and updated `database/schema.sql` default. php -l clean, npm build green.
+
+- **B3 + B4 DONE**: DCR popup width + location filter.
+  - B3: create dialog widened `max-w-5xl` → `w-[96vw] max-w-7xl` so the 12-column visit-lines table
+    (~1064px) fits inside the ~1232px inner width — no horizontal scrollbar on desktop.
+  - B4: added a Location filter (Select) to the DCR list, populated from distinct areas.
+    Backend: `Dcr::all()` accepts an `area` filter (exact match); new `Dcr::distinctAreas()`;
+    `AdminDcrController::areas()` + route `GET /admin/dcr/areas` (registered BEFORE `/admin/dcr/{id}`
+    so the literal wins over the `{id}` param). Frontend: `fetchDcrAreas()` in `dcr.ts`, `area` added
+    to `fetchDcrs` filters, location Select wired into `load()` deps; locations refresh after save.
+  - Cross-module: DCR area feeds Follow-ups on approval (lead title includes area) — unchanged, verified.
+  - php -l clean, npm build green.
 
 ## 5. Blocked items
 (none yet)

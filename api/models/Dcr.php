@@ -37,6 +37,10 @@ class Dcr
             $where[] = 'd.report_date <= ?';
             $params[] = (string)$filters['to'];
         }
+        if (!empty($filters['area'])) {
+            $where[] = 'd.area = ?';
+            $params[] = (string)$filters['area'];
+        }
         if (!empty($filters['search'])) {
             $where[] = '(d.employee_name LIKE ? OR d.dcr_no LIKE ? OR d.area LIKE ?)';
             $like = '%' . $filters['search'] . '%';
@@ -55,6 +59,15 @@ class Dcr
         }
         unset($r);
         return ['rows' => $rows, 'total' => $total];
+    }
+
+    /** Distinct non-empty areas (locations) across all reports, for the location filter. */
+    public static function distinctAreas(): array
+    {
+        $rows = Database::fetchAll(
+            "SELECT DISTINCT area FROM dcr WHERE area IS NOT NULL AND area <> '' ORDER BY area ASC"
+        );
+        return array_map(static fn($r) => (string)$r['area'], $rows);
     }
 
     public static function find(int $id): ?array
