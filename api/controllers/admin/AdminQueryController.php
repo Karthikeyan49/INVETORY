@@ -59,12 +59,18 @@ class AdminQueryController
             $params[] = $like;
         }
 
+        $customerId = (int)$request->query('customer_id', 0);
+        if ($customerId > 0) {
+            $where[]  = 'customer_id = ?';
+            $params[] = $customerId;
+        }
+
         $whereClause = implode(' AND ', $where);
         $total  = Database::count("SELECT COUNT(*) AS cnt FROM queries WHERE $whereClause", $params);
         $offset = ($page - 1) * $limit;
 
         $rows = Database::fetchAll(
-            "SELECT query_id, user_id, query_number, name, email, message,
+            "SELECT query_id, user_id, customer_id, query_number, name, email, message,
                     admin_reply, status, created_at
              FROM queries
              WHERE $whereClause
@@ -83,6 +89,48 @@ class AdminQueryController
         ]);
     }
 
+    // POST /admin/queries — staff-logged enquiry/query, optionally tied to a customer
+    public function store(Request $request): void
+    {
+        Validator::make($request->only(['name', 'email', 'message']), [
+            'name'    => 'required|string|max:100',
+            'message' => 'required|string',
+        ])->validate();
+
+        $customerId = (int)$request->input('customer_id', 0);
+        $email = trim((string)$request->input('email', ''));
+
+        Database::beginTransaction();
+        try {
+            $queryId = Database::insert(
+                'INSERT INTO queries (user_id, customer_id, query_number, name, email, message, status, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, "pending", NOW())',
+                [
+                    $request->user['user_id'] ?? null,
+                    $customerId > 0 ? $customerId : null,
+                    'QRY-TEMP-' . uniqid(),
+                    Request::sanitize((string)$request->input('name')),
+                    Request::sanitize($email),
+                    Request::sanitize((string)$request->input('message')),
+                ]
+            );
+            $queryNumber = 'QRY-' . date('Y') . '-' . str_pad((string)$queryId, 4, '0', STR_PAD_LEFT);
+            Database::execute('UPDATE queries SET query_number = ? WHERE query_id = ?', [$queryNumber, $queryId]);
+            Database::commit();
+        } catch (\Throwable $e) {
+            Database::rollBack();
+            throw $e;
+        }
+
+        $row = Database::fetch(
+            "SELECT query_id, user_id, customer_id, query_number, name, email, message,
+                    admin_reply, status, created_at
+             FROM queries WHERE query_id = ? LIMIT 1",
+            [$queryId]
+        );
+        Response::success(self::normalizeRow($row), 'Enquiry added', 201);
+    }
+
     public function show(Request $request): void
     {
         $queryId = (int)$request->param('id');
@@ -91,7 +139,7 @@ class AdminQueryController
         }
 
         $row = Database::fetch(
-            "SELECT query_id, user_id, query_number, name, email, message,
+            "SELECT query_id, user_id, customer_id, query_number, name, email, message,
                     admin_reply, status, created_at
              FROM queries
              WHERE query_id = ? LIMIT 1",

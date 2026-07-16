@@ -1436,6 +1436,7 @@ CREATE TABLE `purchase_request_items` (
 CREATE TABLE `queries` (
   `query_id` int(11) NOT NULL,
   `user_id` int(11) DEFAULT NULL,
+  `customer_id` int(11) DEFAULT NULL,
   `query_number` varchar(50) NOT NULL,
   `name` varchar(100) NOT NULL,
   `email` varchar(100) NOT NULL,

@@ -1,5 +1,6 @@
-import { Search, Eye, Home, Briefcase, MapPin, KeyRound, FileText, Truck, ShoppingCart } from "lucide-react";
+import { Search, Eye, Home, Briefcase, MapPin, KeyRound, FileText, Truck, ShoppingCart, MessageSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -16,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { fetchCustomers, fetchCustomerOrderStats, updateCustomerStatus, mapApiUserToUI } from "@/lib/api/customers";
 import { fetchCustomerOrders, type CustomerOrderRow } from "@/lib/api/orders";
 import { fetchDeliveries, type DeliveryNote } from "@/lib/api/deliveries";
+import { queriesApi, type Query } from "@/lib/api/queries";
 import { apiFetch } from "@/lib/api/client";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 
@@ -58,6 +60,10 @@ export default function Customers() {
   const [custInvoices, setCustInvoices] = useState<CustomerInvoiceRow[]>([]);
   const [custDeliveries, setCustDeliveries] = useState<DeliveryNote[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [custQueries, setCustQueries] = useState<Query[]>([]);
+  const [queriesLoading, setQueriesLoading] = useState(false);
+  const [enquiryMsg, setEnquiryMsg] = useState("");
+  const [savingEnquiry, setSavingEnquiry] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -124,6 +130,39 @@ export default function Customers() {
         setCustDeliveries(deliveries);
       })
       .finally(() => setHistoryLoading(false));
+
+    // Customer enquiries/queries logged against this customer.
+    loadQueries(c.id);
+  };
+
+  const loadQueries = (customerId: number) => {
+    setQueriesLoading(true);
+    queriesApi.listForCustomer(customerId)
+      .then(setCustQueries)
+      .catch(() => setCustQueries([]))
+      .finally(() => setQueriesLoading(false));
+  };
+
+  const addEnquiry = async () => {
+    if (!selected) return;
+    const msg = enquiryMsg.trim();
+    if (!msg) { toast.error("Enter the enquiry details"); return; }
+    setSavingEnquiry(true);
+    try {
+      await queriesApi.create({
+        name: selected.name,
+        email: selected.email,
+        message: msg,
+        customer_id: selected.id,
+      });
+      setEnquiryMsg("");
+      toast.success("Enquiry added");
+      loadQueries(selected.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not add enquiry");
+    } finally {
+      setSavingEnquiry(false);
+    }
   };
 
   const handleResetPassword = () => {
@@ -146,10 +185,11 @@ export default function Customers() {
           </DialogHeader>
           {selected && (
             <Tabs defaultValue="profile" className="mt-2">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
                 <TabsTrigger value="stats">Order Stats</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
+                <TabsTrigger value="enquiries">Enquiries</TabsTrigger>
               </TabsList>
 
               <TabsContent value="profile" className="space-y-3 py-2">
@@ -339,6 +379,58 @@ export default function Customers() {
                     </div>
                   </>
                 )}
+              </TabsContent>
+
+              <TabsContent value="enquiries" className="space-y-4 py-2">
+                {/* Add a new enquiry/query for this customer */}
+                <div className="space-y-2 rounded-lg border p-3">
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                    <MessageSquare className="h-4 w-4" /> Add Enquiry
+                  </span>
+                  <Textarea
+                    rows={3}
+                    placeholder="Describe the customer's enquiry or query…"
+                    value={enquiryMsg}
+                    onChange={(e) => setEnquiryMsg(e.target.value)}
+                  />
+                  <div className="flex justify-end">
+                    <Button size="sm" onClick={addEnquiry} disabled={savingEnquiry || !enquiryMsg.trim()}>
+                      {savingEnquiry ? "Adding…" : "Add Enquiry"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* This customer's logged enquiries */}
+                <div>
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground mb-2">
+                    <MessageSquare className="h-4 w-4" /> Enquiries &amp; Queries
+                  </span>
+                  {queriesLoading ? (
+                    <p className="text-xs text-muted-foreground">Loading enquiries…</p>
+                  ) : custQueries.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No enquiries logged for this customer yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {custQueries.map((q) => (
+                        <div key={q._queryId} className="rounded-lg border p-2.5 text-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-foreground">{q.id}</span>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px]">{q.status}</Badge>
+                              <span className="text-xs text-muted-foreground">{q.date}</span>
+                            </div>
+                          </div>
+                          <p className="mt-1 text-muted-foreground whitespace-pre-wrap break-words">{q.message}</p>
+                          {q.adminReply && (
+                            <p className="mt-1.5 rounded bg-muted/50 p-2 text-xs text-foreground">
+                              <span className="font-medium">Reply:</span> {q.adminReply}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </TabsContent>
             </Tabs>
           )}

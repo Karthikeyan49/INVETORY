@@ -86,7 +86,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 
 ### Priority B (specific fixes/features — do first)
 - [x] B1. Fix pdf.js worker load error — serve `.mjs` with correct MIME so the worker module loads under nosniff. (2026-07-16)
-- [ ] B2. Customer page: button to add customer queries/enquiries + backing store + list.
+- [x] B2. Customer page: button to add customer queries/enquiries + backing store + list. (2026-07-16)
 - [x] B3. DCR add popup: widen so content fits WITHOUT bottom scrollbar (no inner scroll). (2026-07-16)
 - [x] B4. DCR: add filter by location. (2026-07-16)
 - [x] B5. Attendance page: remove 'Attendance Import', 'TMS Status', 'Face Attendance' buttons; bonus = 0. (2026-07-16)
@@ -183,6 +183,18 @@ over a static `Database` helper) backend on Hostinger shared hosting.
     generated `.htaccess` blocks in `deploy.sh` (admin `public_html` + dealer portal). No frontend code
     change needed. `bash -n deploy.sh` OK.
   - **Requires redeploy** via deploy.sh for the fixed `.htaccess` to take effect (cloud run can't deploy).
+
+- **B2 DONE**: Customer enquiries/queries.
+  - Backing store: migration `036_queries_customer_id.sql` adds `queries.customer_id` (additive,
+    idempotent) + index; schema.sql updated.
+  - Backend: `AdminQueryController::store()` (POST /admin/queries) logs an enquiry with optional
+    `customer_id`; `index()` gained a `customer_id` filter and returns `customer_id`. Route registered.
+  - Frontend: `queries.ts` — `create()`, `listForCustomer()`, `customerId` on Query. Customers page:
+    new **Enquiries** tab (grid-cols-4) with an "Add Enquiry" textarea + list of that customer's
+    enquiries (status, date, reply).
+  - Cross-module: enquiries land in the shared `queries` table, so they also appear in the **Customer
+    Complaints** (Queries) module where staff reply (status → email) — verified same store/flow.
+  - php -l clean, npm build green.
 
 ## 5. Blocked items
 - **Open PR from `fix/security-hardening` → `main`**: BLOCKED. GitHub returns

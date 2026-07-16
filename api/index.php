@@ -657,6 +657,7 @@ $router->get('/admin/reports/inventory/zone-analysis',      [AdminReportsControl
 
 // Admin Queries
 $router->get('/admin/queries',              [AdminQueryController::class,    'index'],        'admin');
+$router->post('/admin/queries',             [AdminQueryController::class,    'store'],        'admin');
 $router->get('/admin/queries/{id}',         [AdminQueryController::class,    'show'],         'admin');
 $router->put('/admin/queries/{id}/reply',   [AdminQueryController::class,    'reply'],        'admin');
 

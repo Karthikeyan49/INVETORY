@@ -11,6 +11,7 @@ export type QueryStatus = "New" | "In Progress" | "Resolved";
 export interface Query {
   id: string;
   _queryId: number;
+  customerId: number | null;
   name: string;
   email: string;
   message: string;
@@ -21,6 +22,7 @@ export interface Query {
 
 interface ApiQueryRow {
   query_id: number;
+  customer_id: number | null;
   query_number: string;
   name: string;
   email: string;
@@ -37,6 +39,7 @@ function rowToQuery(row: ApiQueryRow): Query {
   return {
     id:         row.query_number,
     _queryId:   row.query_id,
+    customerId: row.customer_id ?? null,
     name:       row.name,
     email:      row.email,
     message:    row.message,
@@ -50,6 +53,21 @@ export const queriesApi = {
   async list(): Promise<Query[]> {
     const res = await apiFetch<Paginated<ApiQueryRow>>("/admin/queries?limit=100");
     return (res.data ?? []).map(rowToQuery);
+  },
+
+  /** Queries/enquiries logged against a specific customer. */
+  async listForCustomer(customerId: number): Promise<Query[]> {
+    const res = await apiFetch<Paginated<ApiQueryRow>>(`/admin/queries?customer_id=${customerId}&limit=100`);
+    return (res.data ?? []).map(rowToQuery);
+  },
+
+  /** Log a new enquiry/query, optionally tied to a customer. */
+  async create(input: { name: string; email?: string; message: string; customer_id?: number | null }): Promise<Query> {
+    const res = await apiFetch<Envelope<ApiQueryRow>>("/admin/queries", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return rowToQuery(res.data);
   },
 
   async reply(queryId: number, adminReply: string, status: QueryStatus): Promise<void> {
