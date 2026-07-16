@@ -90,7 +90,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 - [x] B3. DCR add popup: widen so content fits WITHOUT bottom scrollbar (no inner scroll). (2026-07-16)
 - [x] B4. DCR: add filter by location. (2026-07-16)
 - [x] B5. Attendance page: remove 'Attendance Import', 'TMS Status', 'Face Attendance' buttons; bonus = 0. (2026-07-16)
-- [ ] B6. Employee ID card: replace EcoSudar template (front+back) with generalized ID card; remove EcoSudar completely.
+- [x] B6. Employee ID card: replaced EcoSudar template with a generalized, code-drawn card; removed all EcoSudar assets. (2026-07-16)
 - [ ] B7. Payslip download: fix template; 2 download options → keep only one.
 - [x] B8. Settings: hide 'auto absent' card; add configurable 'leave credit days' (days per 1 leave credit) used in payroll. (2026-07-16)
 - [ ] B9. HR module review: after B5–B8, audit HR for mismatches / poor connectivity; fix.

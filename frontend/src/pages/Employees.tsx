@@ -23,8 +23,6 @@ import { StatCard } from "@/components/StatCard";
 import { QrImage } from "@/components/QrImage";
 import { toast } from "sonner";
 import QRCode from "qrcode";
-import idFrontSrc from "@/assets/id-front.png";
-import idBackSrc from "@/assets/id-back.png";
 import { getAuthToken, BASE_URL } from "@/lib/api/client";
 import { getCompanyProfile } from "@/lib/companyProfile";
 import {
@@ -397,91 +395,92 @@ export default function Employees() {
     ctx.restore();
   };
 
-  // ─── Generate FRONT side canvas ────────────────────────────────────────────
+  // ─── Rounded-rect helper ────────────────────────────────────────────────────
+  const roundRect = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  };
+
+  // ─── Generate FRONT side canvas — generalized, template-free ID card ────────
+  // Drawn entirely in code from the tenant's company profile + brand color, so
+  // it works for any company (no baked-in branding).
   const buildFrontCanvas = async (e: Employee): Promise<HTMLCanvasElement> => {
     const W = 590, H = 1004;
     const canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     const fc = canvas.getContext("2d")!;
-
-    // 1. Draw the CLEAN template (all sample data pre-removed by PIL script)
-    const tpl = await loadImage(idFrontSrc);
-    fc.drawImage(tpl, 0, 0, W, H);
-
-    // 1b. ── Brand-colored accent bands ────────────────────────────────────────
-    // Overlay header/footer bands in the tenant brand color so the card visibly
-    // follows the brand instead of being fixed green. Drawn in the top/bottom
-    // margins so the photo and text positions are untouched.
     const brand = brandColor();
-    fc.save();
-    fc.fillStyle = brand;
-    fc.fillRect(0, 0, W, 70);          // top header band
-    fc.fillRect(0, H - 70, W, 70);     // bottom footer band
-    // thin brand accent rule under the text block
-    fc.fillRect(60, 700, W - 120, 4);
-    fc.restore();
+    const company = getCompanyProfile();
 
-    // 2. ── Draw the employee photo ────────────────────────────────────────────
-    // Pixel-perfect positions measured from original 1.png (590×1004):
-    //   Circle center = (307, 402), outer_r = 145, inner_r = 138, border ~7px
-    const PHOTO_CX = 307, PHOTO_CY = 402, PHOTO_R = 138;
-    if (e.photoPath) {
-      try {
-        // Use fetch-based loader to handle cross-origin photos safely
-        const pUrl = photoUrl(e.id, photoTs);
-        console.log("Loading employee photo:", pUrl);
-        const photoImg = await loadImageViaFetch(pUrl);
-        drawCirclePhoto(fc, photoImg, PHOTO_CX, PHOTO_CY, PHOTO_R, brand, 7);
-      } catch (err) {
-        console.warn("Photo load failed:", err);
-        // Grey placeholder with initial
-        fc.beginPath(); fc.arc(PHOTO_CX, PHOTO_CY, PHOTO_R + 7, 0, Math.PI * 2); fc.fillStyle = brand; fc.fill();
-        fc.beginPath(); fc.arc(PHOTO_CX, PHOTO_CY, PHOTO_R, 0, Math.PI * 2); fc.fillStyle = "#d1d5db"; fc.fill();
-        fc.fillStyle = "#6b7280";
-        fc.font = `bold ${PHOTO_R}px system-ui, sans-serif`;
-        fc.textAlign = "center"; fc.textBaseline = "middle";
-        fc.fillText(e.name.charAt(0).toUpperCase(), PHOTO_CX, PHOTO_CY);
-      }
-    } else {
-      // No photo uploaded — draw placeholder with initial letter
-      fc.beginPath(); fc.arc(PHOTO_CX, PHOTO_CY, PHOTO_R + 7, 0, Math.PI * 2); fc.fillStyle = brand; fc.fill();
-      fc.beginPath(); fc.arc(PHOTO_CX, PHOTO_CY, PHOTO_R, 0, Math.PI * 2); fc.fillStyle = "#e5e7eb"; fc.fill();
-      fc.fillStyle = "#6b7280";
-      fc.font = `bold ${PHOTO_R}px system-ui, sans-serif`;
+    // Card background + subtle border
+    fc.fillStyle = "#ffffff"; fc.fillRect(0, 0, W, H);
+
+    // Header band with company name + subtitle
+    fc.fillStyle = brand; fc.fillRect(0, 0, W, 210);
+    fc.textAlign = "center"; fc.textBaseline = "alphabetic"; fc.fillStyle = "#ffffff";
+    fc.font = "bold 40px 'Arial', sans-serif";
+    fc.fillText((company.name || "Company").toUpperCase(), W / 2, 90);
+    if (company.subtitle) {
+      fc.font = "20px 'Arial', sans-serif";
+      fc.fillText(company.subtitle, W / 2, 122);
+    }
+    // "EMPLOYEE ID CARD" pill
+    fc.font = "bold 20px 'Arial', sans-serif";
+    fc.fillStyle = "rgba(255,255,255,0.18)";
+    roundRect(fc, W / 2 - 120, 150, 240, 40, 20); fc.fill();
+    fc.fillStyle = "#ffffff"; fc.fillText("EMPLOYEE ID CARD", W / 2, 177);
+
+    // Photo circle
+    const PHOTO_CX = W / 2, PHOTO_CY = 380, PHOTO_R = 130;
+    const drawPlaceholder = (fill: string) => {
+      fc.beginPath(); fc.arc(PHOTO_CX, PHOTO_CY, PHOTO_R + 8, 0, Math.PI * 2); fc.fillStyle = brand; fc.fill();
+      fc.beginPath(); fc.arc(PHOTO_CX, PHOTO_CY, PHOTO_R, 0, Math.PI * 2); fc.fillStyle = fill; fc.fill();
+      fc.fillStyle = "#6b7280"; fc.font = `bold ${PHOTO_R}px system-ui, sans-serif`;
       fc.textAlign = "center"; fc.textBaseline = "middle";
       fc.fillText(e.name.charAt(0).toUpperCase(), PHOTO_CX, PHOTO_CY);
+      fc.textBaseline = "alphabetic";
+    };
+    if (e.photoPath) {
+      try {
+        const photoImg = await loadImageViaFetch(photoUrl(e.id, photoTs));
+        drawCirclePhoto(fc, photoImg, PHOTO_CX, PHOTO_CY, PHOTO_R, brand, 8);
+      } catch (err) {
+        console.warn("Photo load failed:", err); drawPlaceholder("#d1d5db");
+      }
+    } else {
+      drawPlaceholder("#e5e7eb");
     }
 
-    // 3. ── Draw employee text ─────────────────────────────────────────────────
-    // Positions measured from original template pixel analysis:
-    //   Name block:  y=600..627, centered, ~34px font
-    //   Desig block: y=669..691, centered, ~24px font
-    //   ID block:    y=751..768, x starts 87, ~22px font
-    //   Phone block: y=804..821, x starts 87, ~22px font
-
-    // Name (bold, centered) — baseline at y=627 (bottom of 28px block starting at 600)
+    // Name + designation
     fc.textAlign = "center"; fc.textBaseline = "alphabetic";
-    fc.fillStyle = brand; fc.font = "bold 34px 'Arial Black', 'Arial', sans-serif";
-    fc.fillText(e.name.toUpperCase(), W / 2, 627);
+    fc.fillStyle = "#111827"; fc.font = "bold 38px 'Arial', sans-serif";
+    fc.fillText(e.name.toUpperCase(), W / 2, 600);
+    fc.fillStyle = brand; fc.font = "bold 26px 'Arial', sans-serif";
+    fc.fillText((e.designation || "Employee").toUpperCase(), W / 2, 638);
 
-    // Designation (bold, centered) — baseline at y=691
-    fc.fillStyle = brand; fc.font = "bold 28px 'Arial', sans-serif";
-    fc.fillText((e.designation || "Employee").toUpperCase(), W / 2, 691);
+    // Info panel (ID + Phone)
+    fc.strokeStyle = "#e5e7eb"; fc.lineWidth = 2;
+    roundRect(fc, 60, 690, W - 120, 150, 16); fc.stroke();
+    fc.fillStyle = brand; fc.fillRect(60, 690, 6, 150); // brand accent bar
+    const row = (label: string, value: string, y: number) => {
+      fc.textAlign = "left"; fc.fillStyle = "#6b7280"; fc.font = "bold 22px 'Arial', sans-serif";
+      fc.fillText(label, 100, y);
+      fc.fillStyle = "#111827"; fc.font = "24px 'Arial', sans-serif";
+      fc.fillText(value, 260, y);
+    };
+    row("ID Number", e.id, 748);
+    row("Phone", `+91 ${e.phone.replace(/^\+91\s?/, "")}`, 802);
 
-    // ID Number (left-aligned with label) — baseline at y=768
-    fc.textAlign = "left"; fc.fillStyle = "#333333"; fc.font = "bold 26px 'Arial', sans-serif";
-    fc.fillText("ID Number", 87, 768);
-    fc.fillText(":", 225, 768);
-    fc.font = "26px 'Arial', sans-serif";
-    fc.fillText(e.id, 250, 768);
-
-    // Phone (left-aligned with label) — baseline at y=821
-    fc.font = "bold 26px 'Arial', sans-serif";
-    fc.fillText("Phone", 87, 821);
-    fc.fillText(":", 225, 821);
-    fc.font = "26px 'Arial', sans-serif";
-    const phone = e.phone.replace(/^\+91\s?/, "");
-    fc.fillText(`+91 ${phone}`, 250, 821);
+    // Footer band with company contact
+    fc.fillStyle = brand; fc.fillRect(0, H - 70, W, 70);
+    fc.textAlign = "center"; fc.fillStyle = "#ffffff"; fc.font = "18px 'Arial', sans-serif";
+    const footer = [company.phone && `☎ ${company.phone}`, company.address].filter(Boolean).join("   •   ");
+    if (footer) fc.fillText(footer.slice(0, 64), W / 2, H - 28);
 
     return canvas;
   };
@@ -493,20 +492,20 @@ export default function Employees() {
     const canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     const bc = canvas.getContext("2d")!;
-
-    // 1. Draw the back template (has company contact info at bottom — keep it)
-    const tpl = await loadImage(idBackSrc);
-    bc.drawImage(tpl, 0, 0, W, H);
-
-    // 1b. ── Brand-colored accent band (top, in the margin) ─────────────────────
     const brand = brandColor();
-    bc.save();
-    bc.fillStyle = brand;
-    bc.fillRect(0, 0, W, 70);
-    bc.restore();
+    const company = getCompanyProfile();
+
+    // Background + header band
+    bc.fillStyle = "#ffffff"; bc.fillRect(0, 0, W, H);
+    bc.fillStyle = brand; bc.fillRect(0, 0, W, 150);
+    bc.textAlign = "center"; bc.textBaseline = "alphabetic"; bc.fillStyle = "#ffffff";
+    bc.font = "bold 30px 'Arial', sans-serif";
+    bc.fillText((company.name || "Company").toUpperCase(), W / 2, 70);
+    bc.font = "18px 'Arial', sans-serif";
+    bc.fillText("SCAN TO VERIFY", W / 2, 108);
 
     // 2. QR code in the center white area
-    const QR_SIZE = 280, QR_X = (W - QR_SIZE) / 2, QR_Y = 220;
+    const QR_SIZE = 280, QR_X = (W - QR_SIZE) / 2, QR_Y = 230;
     const qrDataUrl = await QRCode.toDataURL(e.qrToken, {
       width: QR_SIZE * 2, margin: 1, errorCorrectionLevel: "M",
       color: { dark: "#111111", light: "#ffffff" },
@@ -526,6 +525,18 @@ export default function Employees() {
     bc.fillText(`${e.id}  •  ${e.designation || "Employee"}`, W / 2, QR_Y + QR_SIZE + 64);
     bc.fillStyle = "#666666"; bc.font = "13px 'Courier New', monospace";
     bc.fillText(e.qrToken, W / 2, QR_Y + QR_SIZE + 88);
+
+    // "If found, return to…" note + company contact footer band
+    bc.fillStyle = "#9ca3af"; bc.font = "14px 'Arial', sans-serif";
+    bc.fillText("If found, please return to the issuing company.", W / 2, H - 150);
+
+    bc.fillStyle = brand; bc.fillRect(0, H - 120, W, 120);
+    bc.fillStyle = "#ffffff"; bc.textAlign = "center";
+    bc.font = "bold 18px 'Arial', sans-serif";
+    if (company.phone) bc.fillText(`☎ ${company.phone}`, W / 2, H - 82);
+    bc.font = "15px 'Arial', sans-serif";
+    if (company.email) bc.fillText(company.email, W / 2, H - 56);
+    if (company.address) bc.fillText(company.address.slice(0, 60), W / 2, H - 30);
 
     return canvas;
   };
