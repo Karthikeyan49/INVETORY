@@ -27,7 +27,7 @@ import {
   type PurchaseOrder, type PoInput, type PoItem, type PoStatus, type OutstandingSummary,
 } from "@/lib/api/poRegister";
 import { PAYMENT_CATEGORIES } from "@/lib/api/installments";
-import { createMachine } from "@/lib/api/machines";
+import { createMachine, fetchMachines, type Machine } from "@/lib/api/machines";
 import { createSpare, moveSpare, fetchSpares, type Spare } from "@/lib/api/spares";
 
 const money = (v: number | string | null | undefined) =>
@@ -98,6 +98,18 @@ export default function PurchaseOrders() {
   const [confirmPlan, setConfirmPlan] = useState<LinePlan[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [spares, setSpares] = useState<Spare[]>([]);
+  const [machines, setMachines] = useState<Machine[]>([]);
+
+  // Existing machines offered as a dropdown for PO line items (B13). The user
+  // picks a listed machine, or types a new one (the Combobox keeps typed values).
+  const machineOptions = useMemo(
+    () =>
+      machines
+        .map((m) => [m.brand_name, m.model, m.capacity].filter(Boolean).join(" ") || m.code)
+        .filter((label, i, arr) => label && arr.indexOf(label) === i)
+        .sort((a, b) => a.localeCompare(b)),
+    [machines],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,6 +137,8 @@ export default function PurchaseOrders() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
   useEffect(() => { loadOutstanding(); }, [loadOutstanding]);
+  // Load existing machines once for the line-item dropdown (B13).
+  useEffect(() => { fetchMachines({ limit: 200 }).then(({ rows }) => setMachines(rows)).catch(() => setMachines([])); }, []);
 
   function openAdd() {
     setEditingId(null); setForm(emptyForm); setItems([emptyItem()]); setDialogOpen(true);
@@ -445,7 +459,14 @@ export default function PurchaseOrders() {
               <div className="space-y-2">
                 {items.map((it, idx) => (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                    <Input className="col-span-5" placeholder="Item / description" value={it.description} onChange={(e) => setItem(idx, { description: e.target.value })} />
+                    <div className="col-span-5">
+                      <Combobox
+                        options={machineOptions}
+                        value={it.description}
+                        onChange={(v) => setItem(idx, { description: v })}
+                        placeholder="Select a machine or type a new item"
+                      />
+                    </div>
                     <Input className="col-span-2" type="number" min="0" placeholder="Qty" value={it.qty} onChange={(e) => setItem(idx, { qty: Number(e.target.value) })} />
                     <Input className="col-span-2" type="number" min="0" placeholder="Unit price" value={it.unit_price} onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })} />
                     <Input className="col-span-2 bg-muted/40" type="number" placeholder="Amount" value={((Number(it.qty) || 0) * (Number(it.unit_price) || 0)).toFixed(2)} readOnly tabIndex={-1} />

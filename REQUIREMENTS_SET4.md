@@ -97,7 +97,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 - [ ] B10. Payroll: one-click generate-and-save for whole month — ALL employees OR single; NEVER for incentive-type employees; ask 'incentive' at employee creation (store flag, use here).
 - [ ] B11. Ensure HR and Finance are properly connected (payroll → expenses/finance).
 - [x] B12. Purchase Order: label item-row fields; single 'extra charges'; FIX item rows not saving (edit/detail reused item-less list rows). (2026-07-16)
-- [ ] B13. Purchase Order: dropdown of existing machines; only enter new if not listed.
+- [x] B13. Purchase Order: dropdown of existing machines; only enter new if not listed. (2026-07-16)
 - [x] B14. Remove 'AI Insights' and 'Data Import' modules entirely — pages, routes, nav, API clients, backend, dead refs. (2026-07-16)
 - [ ] B15. Quotation Builder: 4 quotation types need DIFFERENT fields — analyse reference PDFs, build distinct page/field-set per type.
 
@@ -195,6 +195,21 @@ over a static `Database` helper) backend on Hostinger shared hosting.
   - Cross-module: enquiries land in the shared `queries` table, so they also appear in the **Customer
     Complaints** (Queries) module where staff reply (status → email) — verified same store/flow.
   - php -l clean, npm build green.
+
+- **B12 DONE**: PO line items save/reload + clearer fields.
+  - Root cause of "item rows always empty": `openEdit`/detail reused the po-register **list** row,
+    but `PoRegister::all()` omits line items — so items were never populated. Fixed: `openEdit` and new
+    `openDetail` fetch the full record via `getPurchaseOrder(id)` and hydrate items/charges. Backend
+    persistence (`replaceItems`) was already correct.
+  - Added persistent column headers (Item/Qty/Unit price/Amount) + a computed read-only Amount cell.
+  - Relabeled "Other charges" → "Extra charges (freight, loading, etc.)"; kept the off-books
+    `extra_amount` (extended view) SEPARATE — the dual-tax mandate forbids merging it into on-books
+    charges. npm build green.
+- **B13 DONE**: PO line-item machine dropdown.
+  - Load existing machines once (`fetchMachines`), build `machineOptions` (brand+model+capacity, else
+    code, de-duped/sorted). The item "description" is now a free-text `Combobox` — pick a listed
+    machine or type a new one ("your typed value will be used"). Cross-module: Inventory Machines →
+    PO line items. npm build green.
 
 ## 5. Blocked items
 - **Open PR from `fix/security-hardening` → `main`**: BLOCKED. GitHub returns
