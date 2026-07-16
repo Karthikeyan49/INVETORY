@@ -11,6 +11,7 @@ import { payrollApi, workingDaysInMonth, type Payslip } from "@/lib/api/hr";
 import { exportToPdf, exportToExcel, type ExportColumn } from "@/lib/exporters";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { getCompanyProfile } from "@/lib/companyProfile";
 import { ScrollableX } from "@/components/ui/scrollable-x";
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
@@ -189,16 +190,30 @@ export default function Payroll() {
 
   const downloadPayslip = (p: Payslip) => {
     const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const tableY = () => ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 95);
-    doc.setFontSize(18);
-    doc.text("INVENTORY MANAGEMENT SYSTEM Inventory & Stamping Management", 40, 50);
-    doc.setFontSize(11);
-    doc.setTextColor(100);
-    doc.text(`Payslip for ${p.month}`, 40, 70);
+    const pageW = doc.internal.pageSize.width;
+    const tableY = () => ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 120);
+    const company = getCompanyProfile();
+
+    // ── Header: company identity (left) + PAYSLIP title (right) ──
+    doc.setFont("helvetica", "bold"); doc.setFontSize(17); doc.setTextColor(20);
+    doc.text((company.name || "Company").toUpperCase(), 40, 50);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(110);
+    let hy = 66;
+    if (company.subtitle) { doc.text(company.subtitle, 40, hy); hy += 12; }
+    if (company.address)  { doc.text(doc.splitTextToSize(company.address, 300), 40, hy); }
+
+    doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.setTextColor(38, 132, 89);
+    doc.text("PAYSLIP", pageW - 40, 50, { align: "right" });
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(90);
+    doc.text(`Pay period: ${p.month}`, pageW - 40, 68, { align: "right" });
+
+    // divider
+    doc.setDrawColor(38, 132, 89); doc.setLineWidth(1.2);
+    doc.line(40, 92, pageW - 40, 92);
     doc.setTextColor(20);
 
     autoTable(doc, {
-      startY: 95,
+      startY: 108,
       theme: "plain",
       body: [
         ["Employee", `${p.employeeName} (${p.employeeId})`],
@@ -254,7 +269,8 @@ export default function Payroll() {
 
     doc.setFontSize(8);
     doc.setTextColor(140);
-    doc.text("This is a system-generated payslip and does not require a signature.", 40, doc.internal.pageSize.height - 30);
+    const foot = `${company.name || "Company"} · This is a system-generated payslip and does not require a signature.`;
+    doc.text(foot, 40, doc.internal.pageSize.height - 30);
     doc.save(`payslip-${p.employeeId}-${p.month}.pdf`);
   };
 
@@ -361,8 +377,7 @@ export default function Payroll() {
                   <td className="px-4 py-3 text-right font-bold text-primary">{inr(p.netPay)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="inline-flex gap-1">
-                      <Button size="icon" variant="ghost" onClick={() => setView(p)}><Receipt className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => downloadPayslip(p)}><FileDown className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" onClick={() => setView(p)} title="View & download payslip"><Receipt className="h-4 w-4" /></Button>
                     </div>
                   </td>
                 </tr>

@@ -91,7 +91,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 - [x] B4. DCR: add filter by location. (2026-07-16)
 - [x] B5. Attendance page: remove 'Attendance Import', 'TMS Status', 'Face Attendance' buttons; bonus = 0. (2026-07-16)
 - [x] B6. Employee ID card: replaced EcoSudar template with a generalized, code-drawn card; removed all EcoSudar assets. (2026-07-16)
-- [ ] B7. Payslip download: fix template; 2 download options → keep only one.
+- [x] B7. Payslip download: proper company-branded PDF template; single download path (View → Download). (2026-07-16)
 - [x] B8. Settings: hide 'auto absent' card; add configurable 'leave credit days' (days per 1 leave credit) used in payroll. (2026-07-16)
 - [ ] B9. HR module review: after B5–B8, audit HR for mismatches / poor connectivity; fix.
 - [ ] B10. Payroll: one-click generate-and-save for whole month — ALL employees OR single; NEVER for incentive-type employees; ask 'incentive' at employee creation (store flag, use here).
