@@ -21,11 +21,9 @@ import {
   CalendarClock,
   BookOpen,
   GitBranch,
-  Sparkles,
   Warehouse,
   FileStack,
   Network,
-  DatabaseZap,
   ShieldCheck,
   Boxes,
   PackageCheck,
@@ -107,18 +105,6 @@ export const sections: MenuSection[] = [
       { title: "Follow-ups", url: "/followups", icon: BellRing },
       { title: "Daily Call Report", url: "/dcr", icon: ClipboardCheck },
       { title: "Customer Complaints", url: "/queries", icon: MessageSquare },
-    ],
-  },
-  {
-    label: "Intelligence",
-    items: [
-      { title: "AI Insights", url: "/insights", icon: Sparkles },
-    ],
-  },
-  {
-    label: "Admin",
-    items: [
-      { title: "Data Interop", url: "/data-interop", icon: DatabaseZap },
     ],
   },
 ];

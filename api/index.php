@@ -113,9 +113,6 @@ require_once ROOT_PATH . '/models/EmployeeAdvance.php';
 require_once ROOT_PATH . '/models/EmployeeCompliance.php';
 require_once ROOT_PATH . '/models/HrImport.php';
 require_once ROOT_PATH . '/models/DataImportMapper.php';
-require_once ROOT_PATH . '/models/DataExportService.php';
-require_once ROOT_PATH . '/models/BackupService.php';
-require_once ROOT_PATH . '/models/Insights.php';
 require_once ROOT_PATH . '/models/Vendor.php';
 require_once ROOT_PATH . '/models/PurchaseRequest.php';
 require_once ROOT_PATH . '/models/Inventory.php';
@@ -185,7 +182,6 @@ require_once ROOT_PATH . '/controllers/admin/AdminEmployeeAdvanceController.php'
 require_once ROOT_PATH . '/helpers/GroqClient.php';
 require_once ROOT_PATH . '/helpers/DataBridge.php';
 require_once ROOT_PATH . '/controllers/ChatController.php';
-require_once ROOT_PATH . '/controllers/admin/AdminInsightsController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminNotificationController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminGstLookupController.php';
 require_once ROOT_PATH . '/controllers/admin/AdminAttachmentController.php';
@@ -682,23 +678,11 @@ $router->post('/admin/import-jobs/{id}/dry-run',[AdminImportController::class, '
 $router->post('/admin/import-jobs/{id}/commit', [AdminImportController::class, 'commit'], 'admin:owner,accountant,hr');
 $router->get('/admin/import-jobs/{id}/errors',  [AdminImportController::class, 'errors'], 'admin:owner,accountant,hr');
 
-// Admin Data Interoperability - Guided imports, exports, backups
-$router->get('/admin/import/modules',                 [AdminDataInteropController::class, 'modules'],     'admin:owner,accountant,hr');
+// Import-mapping support for the HR Import Wizard (CSV template + AI column mapping).
+// The standalone Data Interop module was removed; these two endpoints remain because
+// Employees/Attendance imports still rely on them.
 $router->get('/admin/import/{module}/template',       [AdminDataInteropController::class, 'template'],    'admin:owner,accountant,hr');
-$router->post('/admin/import/{module}/upload',        [AdminDataInteropController::class, 'upload'],      'admin:owner,accountant,hr');
 $router->post('/admin/import/{module}/{job}/ai-map',  [AdminDataInteropController::class, 'aiMap'],       'admin:owner,accountant,hr');
-$router->post('/admin/import/{module}/{job}/map',     [AdminDataInteropController::class, 'map'],         'admin:owner,accountant,hr');
-$router->post('/admin/import/{module}/{job}/dry-run', [AdminDataInteropController::class, 'dryRun'],      'admin:owner,accountant,hr');
-$router->post('/admin/import/{module}/{job}/commit',  [AdminDataInteropController::class, 'commit'],      'admin:owner,accountant,hr');
-$router->get('/admin/import/{job}/errors',            [AdminDataInteropController::class, 'errors'],      'admin:owner,accountant,hr');
-$router->get('/admin/import/{job}',                   [AdminDataInteropController::class, 'showImport'],  'admin:owner,accountant,hr');
-$router->get('/admin/export/all',                     [AdminDataInteropController::class, 'exportAll'],   'admin:owner');
-$router->get('/admin/export/{module}',                [AdminDataInteropController::class, 'exportModule'],'admin:owner,accountant,hr');
-$router->get('/admin/backup/status',                  [AdminDataInteropController::class, 'backupStatus'],'admin:owner');
-$router->post('/admin/backup/run',                    [AdminDataInteropController::class, 'runBackup'],  'admin:owner');
-
-// Admin Insights (AI-powered)
-$router->post('/admin/insights/generate',   [AdminInsightsController::class, 'generate'],     'admin');
 
 // ─── Admin Employees ─────────────────────────────────────────────────────────
 $router->get('/admin/employees',                      [AdminEmployeeController::class, 'index'],        'admin');

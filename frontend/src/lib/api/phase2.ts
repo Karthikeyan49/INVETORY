@@ -298,24 +298,10 @@ export const phase2Api = {
       downloadPath(`/admin/${kind === "employees" ? "employees" : "attendance"}/import/${jobId}/errors`, `${kind}-import-${jobId}-errors.csv`),
   },
 
+  // Import-mapping helpers retained for the HR Import Wizard (Employees/Attendance).
+  // The standalone Data Interop module was removed; only these two endpoints survive.
   interop: {
-    modules: () => apiFetch<Envelope<ApiRow>>("/admin/import/modules").then(data),
-    jobs: (params?: ApiRow) => apiFetch<Paginated<ApiRow>>(`/admin/import-jobs${qs({ limit: 100, ...params })}`).then(rows),
     template: (module: string) => downloadPath(`/admin/import/${module}/template`, `${module}-template.csv`),
-    upload: (module: string, file: File) => {
-      const form = new FormData();
-      form.append("file", file);
-      return upload(`/admin/import/${module}/upload`, form);
-    },
     aiMap: (module: string, jobId: number) => post(`/admin/import/${module}/${jobId}/ai-map`),
-    map: (module: string, jobId: number, mapping: ApiRow) => post(`/admin/import/${module}/${jobId}/map`, { mapping }),
-    dryRun: (module: string, jobId: number, mapping?: ApiRow) => post(`/admin/import/${module}/${jobId}/dry-run`, mapping ? { mapping } : {}),
-    commit: (module: string, jobId: number) => post(`/admin/import/${module}/${jobId}/commit`),
-    job: (jobId: number, withRows = false) => apiFetch<Envelope<ApiRow>>(`/admin/import/${jobId}${qs({ rows: withRows ? 1 : "" })}`).then(data),
-    errors: (jobId: number) => downloadPath(`/admin/import/${jobId}/errors`, `import-${jobId}-errors.csv`),
-    exportModule: (module: string, params?: ApiRow) => downloadPath(`/admin/export/${module}${qs(params)}`, `${module}-export.csv`),
-    exportAll: (params?: ApiRow) => downloadPath(`/admin/export/all${qs(params)}`, "inventory-full-export.zip"),
-    backupStatus: () => apiFetch<Envelope<ApiRow>>("/admin/backup/status").then(data),
-    runBackup: () => post("/admin/backup/run"),
   },
 };

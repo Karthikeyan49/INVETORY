@@ -34,11 +34,9 @@ import Dcr from "./pages/Dcr";
 import AdvanceRegister from "./pages/AdvanceRegister";
 import SettingsPage from "./pages/Settings";
 import Queries from "./pages/Queries";
-import Insights from "./pages/Insights";
 import SalesBilling from "./pages/SalesBilling";
 import QuotationBuilder from "./pages/QuotationBuilder";
 import FinancePlanning from "./pages/FinancePlanning";
-import DataInterop from "./pages/DataInterop";
 import InventoryDashboard from "./pages/inventory/InventoryDashboard";
 import InventoryIntelligence from "./pages/inventory/InventoryIntelligence";
 import Spares from "./pages/inventory/Spares";
@@ -112,8 +110,6 @@ function ProtectedRoutes() {
         <Route path="/incentives" element={<Incentives />} />
         <Route path="/advance-register" element={<AdvanceRegister />} />
         <Route path="/queries" element={<Queries />} />
-        <Route path="/insights" element={<Insights />} />
-        <Route path="/data-interop" element={<DataInterop />} />
         <Route path="/inventory" element={<InventoryDashboard />} />
         <Route path="/inventory/intelligence" element={<InventoryIntelligence />} />
         <Route path="/settings" element={<SettingsPage />} />

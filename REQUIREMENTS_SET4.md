@@ -98,7 +98,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 - [ ] B11. Ensure HR and Finance are properly connected (payroll → expenses/finance).
 - [ ] B12. Purchase Order: label item-row fields clearly; collapse multiple 'other charges' into single 'extra charges'; FIX item rows not saving (always empty); persist + reload on edit.
 - [ ] B13. Purchase Order: dropdown of existing machines; only enter new if not listed.
-- [ ] B14. Remove 'AI Insights' and 'Data Import' modules entirely — pages, routes, nav, API clients, backend, dead refs.
+- [x] B14. Remove 'AI Insights' and 'Data Import' modules entirely — pages, routes, nav, API clients, backend, dead refs. (2026-07-16)
 - [ ] B15. Quotation Builder: 4 quotation types need DIFFERENT fields — analyse reference PDFs, build distinct page/field-set per type.
 
 ### Priority A (ongoing quality-gate audits — never fully complete)
@@ -118,6 +118,20 @@ over a static `Database` helper) backend on Hostinger shared hosting.
   (`api/index.php`), nav (`frontend/src/lib/navigation.ts`, `App.tsx`), controllers, models, api clients.
 - Identified B14 targets: Intelligence section (AI Insights → /insights, Insights.php model) and
   Admin section (Data Interop → /data-interop, DataImport/Export services).
+- **B14 DONE**: Removed AI Insights + Data Interop modules.
+  - Frontend: deleted `pages/Insights.tsx`, `pages/DataInterop.tsx`; removed their imports+routes in
+    `App.tsx`; removed "Intelligence" + "Admin" nav sections and unused icons (Sparkles, DatabaseZap)
+    in `lib/navigation.ts`; trimmed `phase2.ts` `interop` object to only `template` + `aiMap`.
+  - Backend: deleted `models/Insights.php`, `models/DataExportService.php`, `models/BackupService.php`,
+    `controllers/admin/AdminInsightsController.php`; slimmed `AdminDataInteropController` to just
+    `template` + `aiMap`; removed dead requires + routes in `index.php`.
+  - KEPT (shared, NOT dead): `interop.template` + `interop.aiMap` and their routes/controller methods —
+    the **HR Import Wizard** (`components/HrImportWizard.tsx`, used by Employees + Attendance import)
+    depends on them. `DataImportMapper`, `ImportEngine`, `GroqAPI` kept (used by HR imports + aiMap).
+  - Verified: `rg` shows zero dangling frontend refs; `php -l` clean on index.php + controller;
+    `npm run build` green.
+  - Note for later tasks: build emits `dist/assets/pdf.worker.min-*.mjs` (B1 context) and
+    `id-front`/`id-back` PNGs = EcoSudar ID card assets (B6 context).
 
 ---
 
