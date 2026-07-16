@@ -80,7 +80,7 @@ const emptyForm = (): EmployeePayload => ({
   pfEnabled: true,
   pfPercent: 12,
   bonusPercent: 0,
-  attendanceBonusAmount: 750,
+  attendanceBonusAmount: 0,
   esiEnabled: false,
   esiEmployeePercent: 0.75,
   siteAllowance: 0,
@@ -1007,7 +1007,7 @@ export default function Employees() {
                   <Input
                     type="text"
                     inputMode="decimal"
-                    value={form.attendanceBonusAmount === undefined ? "750" : String(form.attendanceBonusAmount)}
+                    value={form.attendanceBonusAmount === undefined ? "0" : String(form.attendanceBonusAmount)}
                     onChange={(e) => {
                       const cleaned = e.target.value
                         .replace(/[^\d.]/g, "")

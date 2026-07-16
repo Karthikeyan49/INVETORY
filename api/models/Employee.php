@@ -337,7 +337,7 @@ class Employee
             'pfEnabled'                  => (bool)($row['pf_enabled'] ?? true),
             'pfPercent'                  => (float)($row['pf_percent'] ?? 12),
             'bonusPercent'               => (float)($row['bonus_percent'] ?? 0),
-            'attendanceBonusAmount'      => (float)($row['attendance_bonus_amount'] ?? 750),
+            'attendanceBonusAmount'      => (float)($row['attendance_bonus_amount'] ?? 0),
             'defaultShiftId'             => isset($row['default_shift_id']) && $row['default_shift_id'] !== null ? (string)$row['default_shift_id'] : '',
             'esiEnabled'                 => (bool)($row['esi_enabled'] ?? false),
             'esiEmployeePercent'         => (float)($row['esi_employee_percent'] ?? 0.75),

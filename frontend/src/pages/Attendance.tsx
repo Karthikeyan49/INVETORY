@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Camera, ScanLine, CheckCircle2, Clock, Calendar, Users,
-  FileDown, FileUp, Plus, Pencil, Trash2, BarChart2, TrendingUp,
-  Loader2, SlidersHorizontal, X, ListChecks,
+  ScanLine, CheckCircle2, Clock, Calendar, Users,
+  FileDown, Plus, Pencil, Trash2, BarChart2, TrendingUp,
+  Loader2, SlidersHorizontal, X,
 } from "lucide-react";
-import { HrImportWizard } from "@/components/HrImportWizard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +20,6 @@ import {
 } from "@/components/ui/dialog";
 import { StatCard } from "@/components/StatCard";
 import { QrScanner } from "@/components/QrScanner";
-import { FaceAttendanceScanner } from "@/components/FaceAttendanceScanner";
 import { toast } from "sonner";
 import {
   attendanceApi, employeesApi,
@@ -511,9 +509,6 @@ export default function Attendance() {
   const [to, setTo]                 = useState(todayStr());
   const [empFilter, setEmpFilter]   = useState("all");
   const [scannerOpen, setScannerOpen]       = useState(false);
-  const [faceScannerOpen, setFaceScannerOpen] = useState(false);
-  const [tmsImportOpen, setTmsImportOpen] = useState(false);
-  const [taskImportOpen, setTaskImportOpen] = useState(false);
   const [busy, setBusy]             = useState(false);
   const [lastScan, setLastScan]     = useState<{ name: string; action: string; time: string } | null>(null);
 
@@ -628,23 +623,6 @@ export default function Attendance() {
     finally { setBusy(false); }
   };
 
-  const onFaceMatch = async (employeeId: string) => {
-    setBusy(true);
-    try {
-      const rows = await attendanceApi.list({ from: todayStr(), to: todayStr(), employeeId });
-      const openToday = rows.some(
-        (entry) => entry.employeeId === employeeId && entry.checkIn && !entry.checkOut
-      );
-      const result = openToday
-        ? await attendanceApi.checkOut(employeeId)
-        : await attendanceApi.checkIn(employeeId);
-      handleAttendanceMarked(result);
-    } catch (error: unknown) {
-      toast.error(errorMessage(error));
-      throw error;
-    } finally { setBusy(false); }
-  };
-
   const openNew = () => {
     setEditEntry(null);
     setForm({
@@ -752,11 +730,9 @@ export default function Attendance() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Attendance</h1>
-          <p className="text-muted-foreground">Scan by face or QR, or add entries manually.</p>
+          <p className="text-muted-foreground">Scan by QR, or add entries manually.</p>
         </div>
         <div className="flex flex-wrap gap-2 justify-start md:justify-end">
-          <Button variant="outline" onClick={() => setTmsImportOpen(true)}><FileUp className="h-4 w-4" /> Attendance Import</Button>
-          <Button variant="outline" onClick={() => setTaskImportOpen(true)}><ListChecks className="h-4 w-4" /> Task Status (TMS)</Button>
           {activeTab === "analytics" ? (
             <Button variant="outline" onClick={exportMonthlySummary} disabled={exportingSummary}>
               {exportingSummary
@@ -771,7 +747,6 @@ export default function Attendance() {
             </Button>
           )}
           <Button variant="outline" onClick={openNew}><Plus className="h-4 w-4" /> Manual Entry</Button>
-          <Button onClick={() => setFaceScannerOpen(true)}><Camera className="h-4 w-4" /> Face Attendance</Button>
           <Button variant="outline" onClick={() => setScannerOpen(true)}><ScanLine className="h-4 w-4" /> QR Attendance</Button>
         </div>
       </div>
@@ -985,16 +960,6 @@ export default function Attendance() {
         <QrScanner fullscreen onScan={onScan} busy={busy} onClose={() => setScannerOpen(false)} />
       )}
 
-      {/* Face Scanner overlay */}
-      {faceScannerOpen && (
-        <FaceAttendanceScanner
-          employees={employees}
-          busy={busy}
-          onMatch={onFaceMatch}
-          onClose={() => setFaceScannerOpen(false)}
-        />
-      )}
-
       {/* Scan success popup */}
       {lastScan && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/35 px-4 pointer-events-none">
@@ -1168,8 +1133,6 @@ export default function Attendance() {
         </DialogContent>
       </Dialog>
 
-      <HrImportWizard kind="attendance" open={tmsImportOpen} onClose={() => setTmsImportOpen(false)} onDone={load} />
-      <HrImportWizard kind="tasks" open={taskImportOpen} onClose={() => setTaskImportOpen(false)} onDone={load} />
     </div>
   );
 }

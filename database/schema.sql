@@ -437,7 +437,7 @@ CREATE TABLE `employees` (
   `pf_enabled` tinyint(1) NOT NULL DEFAULT 1,
   `pf_percent` decimal(5,2) NOT NULL DEFAULT 12.00,
   `bonus_percent` decimal(5,2) NOT NULL DEFAULT 0.00,
-  `attendance_bonus_amount` decimal(10,2) NOT NULL DEFAULT 750.00,
+  `attendance_bonus_amount` decimal(10,2) NOT NULL DEFAULT 0.00,
   `default_shift_id` int(11) DEFAULT NULL,
   `esi_enabled` tinyint(1) NOT NULL DEFAULT 0,
   `esi_employee_percent` decimal(5,2) NOT NULL DEFAULT 0.75,

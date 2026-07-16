@@ -89,7 +89,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 - [ ] B2. Customer page: button to add customer queries/enquiries + backing store + list.
 - [ ] B3. DCR add popup: widen so content fits WITHOUT bottom scrollbar (no inner scroll).
 - [ ] B4. DCR: add filter by location.
-- [ ] B5. Attendance page: remove 'Attendance Import', 'TMS Status', 'Face Attendance' buttons; bonus = 0.
+- [x] B5. Attendance page: remove 'Attendance Import', 'TMS Status', 'Face Attendance' buttons; bonus = 0. (2026-07-16)
 - [ ] B6. Employee ID card: replace EcoSudar template (front+back) with generalized ID card; remove EcoSudar completely.
 - [ ] B7. Payslip download: fix template; 2 download options → keep only one.
 - [ ] B8. Settings: hide 'auto absent' card; add configurable 'leave credit days' (days per 1 leave credit) used in payroll.
@@ -134,6 +134,19 @@ over a static `Database` helper) backend on Hostinger shared hosting.
     `id-front`/`id-back` PNGs = EcoSudar ID card assets (B6 context).
 
 ---
+
+- **B5 DONE**: Attendance page cleanup + zero bonus.
+  - Removed buttons: 'Attendance Import' (tmsImportOpen), 'Task Status (TMS)' (taskImportOpen),
+    'Face Attendance' (faceScannerOpen) in `pages/Attendance.tsx`. Removed the related state,
+    `onFaceMatch` handler, the two attendance/tasks `HrImportWizard` instances, the FaceScanner
+    overlay, and unused imports (Camera, FileUp, ListChecks, FaceAttendanceScanner). Deleted the now
+    dead `components/FaceAttendanceScanner.tsx`. Header subtitle → "Scan by QR, or add entries manually."
+  - `HrImportWizard` kept (still used by Employees employee-import) → `interop.template`/`aiMap`
+    dependency from B14 confirmed still needed.
+  - Attendance bonus → 0 everywhere: `attendance_bonus_amount` fallback 750→0 in
+    `AdminPayrollController.php`, `Employee.php`, `hr.ts`, and Employees form default + placeholder;
+    added idempotent migration `035_attendance_bonus_zero.sql` (column DEFAULT 0 + zero existing rows)
+    and updated `database/schema.sql` default. php -l clean, npm build green.
 
 ## 5. Blocked items
 (none yet)

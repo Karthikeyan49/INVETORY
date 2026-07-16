@@ -764,7 +764,7 @@ export const payrollApi = {
 
         const earnedSalary    = Math.round(salaryPerDay * payableDays * 100) / 100;
         const overtimeSalary  = Math.round(overtimeRate * overtimeHrs * 100) / 100;
-        const attendanceBonusAmount = Math.max(0, Number(emp.attendanceBonusAmount ?? 750));
+        const attendanceBonusAmount = Math.max(0, Number(emp.attendanceBonusAmount ?? 0));
         const attendBonus     = daysWorked >= workingDays ? attendanceBonusAmount : 0;
         const leaveSalary     = Math.round(salaryPerDay * unpaidLeave * 100) / 100;
         const salaryAdvancePaid = Math.round(Math.max(0, Number(advanceTotals[emp.id] ?? 0)) * 100) / 100;

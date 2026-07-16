@@ -289,7 +289,7 @@ class AdminPayrollController
         $leaveAvailed = (int)$leaves;
         $earnedSalary = round($salaryPerDay * $presentDays, 2);
         $overtimeSalary = round($overtimeRate * $overtimeHrs, 2);
-        $attendanceBonusAmount = round(max(0, (float)($emp['attendance_bonus_amount'] ?? 750)), 2);
+        $attendanceBonusAmount = round(max(0, (float)($emp['attendance_bonus_amount'] ?? 0)), 2);
         $attendBonus = $presentDays >= $workingDays ? $attendanceBonusAmount : 0.0;
         $leaveSalary = round($salaryPerDay * $leaveAvailed, 2);
 
