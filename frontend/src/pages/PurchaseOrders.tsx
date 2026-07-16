@@ -22,7 +22,7 @@ import { Combobox } from "@/components/ui/combobox";
 import PaymentLedger from "@/components/PaymentLedger";
 import { exportToExcel, exportToPdf } from "@/lib/exporters";
 import {
-  fetchPurchaseOrders, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder,
+  fetchPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder,
   fetchOutstanding, PO_STATUSES,
   type PurchaseOrder, type PoInput, type PoItem, type PoStatus, type OutstandingSummary,
 } from "@/lib/api/poRegister";
@@ -129,7 +129,18 @@ export default function PurchaseOrders() {
   function openAdd() {
     setEditingId(null); setForm(emptyForm); setItems([emptyItem()]); setDialogOpen(true);
   }
-  function openEdit(po: PurchaseOrder) {
+  // Open the detail dialog with the list row immediately, then hydrate line items
+  // from the full record (the list endpoint omits items).
+  async function openDetail(po: PurchaseOrder) {
+    setDetail(po);
+    try {
+      const full = await getPurchaseOrder(po.id);
+      setDetail((cur) => (cur && cur.id === po.id ? full : cur));
+    } catch {
+      // Keep the list row; items just won't show.
+    }
+  }
+  async function openEdit(po: PurchaseOrder) {
     setEditingId(po.id);
     setForm({
       vendor_name: po.vendor_name, category: po.category ?? "", location: po.location ?? "",
@@ -138,8 +149,21 @@ export default function PurchaseOrders() {
       payment_category: po.payment_category ?? "Bank Transfer", utr_no: po.utr_no ?? "",
       advance: "", status: po.status, notes: po.notes ?? "", payment_mode: "credit",
     });
+    // List rows don't carry line items (the list endpoint omits them for speed),
+    // so fetch the full record to load the saved item rows into the editor.
     setItems(po.items && po.items.length ? po.items.map((i) => ({ ...i })) : [emptyItem()]);
     setDialogOpen(true);
+    try {
+      const full = await getPurchaseOrder(po.id);
+      setItems(full.items && full.items.length ? full.items.map((i) => ({ ...i })) : [emptyItem()]);
+      setForm((f) => ({
+        ...f,
+        other_charges: full.other_charges ? String(full.other_charges) : f.other_charges,
+        extra_amount: full.extra_amount ? String(full.extra_amount) : f.extra_amount,
+      }));
+    } catch {
+      // Keep whatever the list row provided; the user can still edit.
+    }
   }
 
   const cleanItems = () => items.filter((i) => i.description.trim() !== "");
@@ -368,7 +392,7 @@ export default function PurchaseOrders() {
             ) : rows.length === 0 ? (
               <tr><td colSpan={8} className="p-4 text-muted-foreground">No purchase orders yet.</td></tr>
             ) : rows.map((po) => (
-              <tr key={po.id} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setDetail(po)}>
+              <tr key={po.id} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => openDetail(po)}>
                 <td className="px-2 py-2 font-medium">{po.po_no}</td>
                 <td className="px-2 py-2">{po.vendor_name}</td>
                 <td className="px-2 py-2">{po.category || "—"}</td>
@@ -407,16 +431,25 @@ export default function PurchaseOrders() {
               </div>
             </div>
 
-            {/* Items */}
+            {/* Items — line items for this purchase order */}
             <div>
-              <label className="text-xs text-muted-foreground">Items</label>
+              <label className="text-xs font-medium text-foreground">Line items</label>
+              {/* Persistent column headers so each field is clearly named even after it's filled */}
+              <div className="grid grid-cols-12 gap-2 mt-1 mb-1 px-0.5">
+                <span className="col-span-5 text-[11px] font-medium text-muted-foreground">Item / description</span>
+                <span className="col-span-2 text-[11px] font-medium text-muted-foreground">Qty</span>
+                <span className="col-span-2 text-[11px] font-medium text-muted-foreground">Unit price (₹)</span>
+                <span className="col-span-2 text-[11px] font-medium text-muted-foreground">Amount (₹)</span>
+                <span className="col-span-1" />
+              </div>
               <div className="space-y-2">
                 {items.map((it, idx) => (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                    <Input className="col-span-6" placeholder="Description" value={it.description} onChange={(e) => setItem(idx, { description: e.target.value })} />
-                    <Input className="col-span-2" type="number" placeholder="Qty" value={it.qty} onChange={(e) => setItem(idx, { qty: Number(e.target.value) })} />
-                    <Input className="col-span-3" type="number" placeholder="Unit price" value={it.unit_price} onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })} />
-                    <button className="col-span-1 text-red-500 hover:text-red-700" onClick={() => setItems(items.length > 1 ? items.filter((_, i) => i !== idx) : [emptyItem()])}><Trash2 className="h-4 w-4" /></button>
+                    <Input className="col-span-5" placeholder="Item / description" value={it.description} onChange={(e) => setItem(idx, { description: e.target.value })} />
+                    <Input className="col-span-2" type="number" min="0" placeholder="Qty" value={it.qty} onChange={(e) => setItem(idx, { qty: Number(e.target.value) })} />
+                    <Input className="col-span-2" type="number" min="0" placeholder="Unit price" value={it.unit_price} onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })} />
+                    <Input className="col-span-2 bg-muted/40" type="number" placeholder="Amount" value={((Number(it.qty) || 0) * (Number(it.unit_price) || 0)).toFixed(2)} readOnly tabIndex={-1} />
+                    <button className="col-span-1 text-red-500 hover:text-red-700 justify-self-center" onClick={() => setItems(items.length > 1 ? items.filter((_, i) => i !== idx) : [emptyItem()])}><Trash2 className="h-4 w-4" /></button>
                   </div>
                 ))}
               </div>
@@ -429,12 +462,12 @@ export default function PurchaseOrders() {
                 <Input type="number" value={form.gst_pct} onChange={(e) => setForm({ ...form, gst_pct: e.target.value })} />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Other charges</label>
+                <label className="text-xs text-muted-foreground">Extra charges (freight, loading, etc.)</label>
                 <Input type="number" value={form.other_charges} onChange={(e) => setForm({ ...form, other_charges: e.target.value })} />
               </div>
               {extended && (
                 <div>
-                  <label className="text-xs text-muted-foreground">Extra (off-books)</label>
+                  <label className="text-xs text-muted-foreground">Off-books extra (extended view)</label>
                   <Input type="number" value={form.extra_amount} onChange={(e) => setForm({ ...form, extra_amount: e.target.value })} />
                 </div>
               )}

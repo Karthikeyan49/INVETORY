@@ -96,7 +96,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 - [ ] B9. HR module review: after B5–B8, audit HR for mismatches / poor connectivity; fix.
 - [ ] B10. Payroll: one-click generate-and-save for whole month — ALL employees OR single; NEVER for incentive-type employees; ask 'incentive' at employee creation (store flag, use here).
 - [ ] B11. Ensure HR and Finance are properly connected (payroll → expenses/finance).
-- [ ] B12. Purchase Order: label item-row fields clearly; collapse multiple 'other charges' into single 'extra charges'; FIX item rows not saving (always empty); persist + reload on edit.
+- [x] B12. Purchase Order: label item-row fields; single 'extra charges'; FIX item rows not saving (edit/detail reused item-less list rows). (2026-07-16)
 - [ ] B13. Purchase Order: dropdown of existing machines; only enter new if not listed.
 - [x] B14. Remove 'AI Insights' and 'Data Import' modules entirely — pages, routes, nav, API clients, backend, dead refs. (2026-07-16)
 - [ ] B15. Quotation Builder: 4 quotation types need DIFFERENT fields — analyse reference PDFs, build distinct page/field-set per type.
