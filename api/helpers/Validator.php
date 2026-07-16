@@ -111,12 +111,39 @@ class Validator
                 break;
 
             case 'gst':
-                // Indian GST: 15 chars alphanumeric
-                if (!preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/', strtoupper((string)$value))) {
-                    $this->errors[$field][] = "$field must be a valid GST number (e.g. 29ABCDE1234F1Z5)";
+                // Indian GSTIN: 15-char format + official modulo-36 check digit.
+                if (!self::isValidGstin((string)$value)) {
+                    $this->errors[$field][] = "$field must be a valid GSTIN (e.g. 29ABCDE1234F1Z5)";
                 }
                 break;
         }
+    }
+
+    /**
+     * Validate an Indian GSTIN: 15-char format AND the official GSTN modulo-36
+     * check digit (the 15th char, computed over the first 14). Shared so every
+     * GSTIN entry point (vendors, settings, invoices, quotations) is consistent.
+     */
+    public static function isValidGstin(string $gstin): bool
+    {
+        $g = strtoupper(trim($gstin));
+        if (!preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $g)) {
+            return false;
+        }
+        $code = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $mod = 36;
+        $factor = 2;
+        $sum = 0;
+        for ($i = 13; $i >= 0; $i--) {
+            $cp = strpos($code, $g[$i]);
+            if ($cp === false) return false;
+            $digit = $factor * $cp;
+            $factor = $factor === 2 ? 1 : 2;
+            $digit = intdiv($digit, $mod) + ($digit % $mod);
+            $sum += $digit;
+        }
+        $check = $code[($mod - ($sum % $mod)) % $mod];
+        return $check === $g[14];
     }
 
     public function fails(): bool  { return !empty($this->errors); }

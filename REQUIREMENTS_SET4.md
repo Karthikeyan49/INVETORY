@@ -105,7 +105,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 - [ ] A1. UI/UX presentable & professional — number overflow / large counts, empty/loading states, no broken layouts.
 - [ ] A2. Whole-website CRUD integrity — create saves; edit loads existing values + re-saves. Fix every add/edit/save bug.
 - [x] A3. Vendors: PO-dropdown-created vendor now persists to the register (Vendor::ensureByName + backfill). (2026-07-16)
-- [ ] A4. GST validation: every GSTIN field validates format (15-char GSTIN + checksum) on input + save, consistently.
+- [x] A4. GSTIN validation (format + official checksum) shared util applied on-save across all GSTIN fields. (2026-07-16)
 - [ ] A5. Module audit: every module works; every page correctly wired (routes, API client, data).
 - [ ] A6. Hidden-data audit: no page relies on data hidden/removed; everything connected to depended modules.
 
@@ -220,6 +220,16 @@ over a static `Database` helper) backend on Hostinger shared hosting.
     and fills any missing vendor_code. PO vendor Combobox now also lists register vendors
     (`fetchVendors`) and refreshes after save.
   - php -l clean, npm build green.
+
+- **A4 DONE**: consistent GSTIN validation site-wide.
+  - New shared `frontend/src/lib/gstin.ts`: `GSTIN_REGEX`, `gstinCheckDigit` (official GSTN modulo-36
+    algorithm), `isValidGstin`, `gstinError`. Backend: `Validator::isValidGstin()` (same algorithm) and
+    the `gst` rule now enforces the checksum.
+  - Verified against real data: `33AGTPT3190M1ZM` (Sri Vari) and `33AUSPB5370L2ZB` (company default)
+    pass; wrong check digits and the placeholder `29ABCDE1234F1Z5` are rejected.
+  - Applied on-save: Vendors, Settings (company GSTIN), Invoices (create + edit), QuotationBuilder,
+    SalesBilling (frontend `gstinError`); backend AdminVendorController + AdminSettingsController now
+    checksum-validate. php -l clean, npm build green.
 
 ## 5. Blocked items
 - **Open PR from `fix/security-hardening` → `main`**: BLOCKED. GitHub returns

@@ -20,6 +20,7 @@ import { fetchSpares, type Spare } from "@/lib/api/spares";
 import { invoicesApi, GST_RATES } from "@/lib/api/invoices";
 import { settingsApi } from "@/lib/api/settings";
 import { stateFromGstin } from "@/lib/gstState";
+import { gstinError } from "@/lib/gstin";
 import { parseQuotationPrompt } from "@/lib/quotationPrompt";
 import { downloadQuotationPdf } from "@/lib/quotationPdf";
 import { addOption, mergedOptions } from "@/lib/fieldOptions";
@@ -606,6 +607,8 @@ export default function QuotationBuilder() {
   const save = async (downloadAfter = false, mode: "update" | "new" = "update") => {
     if (!header.customer_name.trim()) { toast.error("Customer (M/S) name is required"); return; }
     if (!items.some((it) => it.name.trim())) { toast.error("Add at least one line item"); return; }
+    const gerr = gstinError(header.customer_gstin);
+    if (gerr) { toast.error(gerr); return; }
     setSaving(true);
     try {
       const saved = editingId && mode === "update"

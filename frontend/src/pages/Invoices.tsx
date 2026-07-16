@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { gstinError } from "@/lib/gstin";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
@@ -568,6 +569,7 @@ export default function Invoices() {
     if (!newForm.customer_state.trim()) { toast.error("Customer state is required"); return; }
     if (newForm.lines.some(l => !l.description.trim())) { toast.error("All line items need a description"); return; }
     if (newForm.lines.some(l => l.quantity <= 0)) { toast.error("Quantity must be greater than 0"); return; }
+    { const gerr = gstinError(newForm.customer_gstin); if (gerr) { toast.error(gerr); return; } }
 
     setNewSaving(true);
     try {
@@ -720,6 +722,7 @@ export default function Invoices() {
     if (editForm.lines.some(l => !l.description.trim() || l.quantity <= 0)) {
       toast.error("All line items need a description and quantity > 0"); return;
     }
+    { const gerr = gstinError(editForm.customer_gstin); if (gerr) { toast.error(gerr); return; } }
     setEditSaving(true);
     try {
       // Save/update each line item to the invoice product catalog

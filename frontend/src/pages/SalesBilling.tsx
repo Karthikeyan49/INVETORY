@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BadgeIndianRupee, FileBadge, FileCheck2, FileDown, FilePlus2, Landmark, Pencil, Plus, ReceiptText, RefreshCw, Save, Send, Trash2, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { gstinError } from "@/lib/gstin";
 import { downloadSalesDocumentPdf } from "@/lib/salesDocumentPdf";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -155,6 +156,8 @@ export default function SalesBilling() {
     const items = buildItems();
     if (items.length === 0) return toast.error("Add at least one line item with a description");
     if (items.some((it) => it.quantity <= 0 || it.unit_price < 0)) return toast.error("Each line needs a quantity > 0 and a non-negative price");
+    const gerr = gstinError(String(salesDoc.customer_gstin ?? ""));
+    if (gerr) return toast.error(gerr);
     const payload: ApiRow = { ...salesDoc, delivery_fee: num(salesDoc.delivery_fee), discount: num(salesDoc.discount), items };
     setSavingDoc(true);
     try {

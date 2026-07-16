@@ -10,6 +10,7 @@ import {
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { gstinError } from "@/lib/gstin";
 import { useAuth } from "@/contexts/AuthContext";
 import { settingsApi, type SettingsData } from "@/lib/api/settings";
 import { attendanceApi, type AttendanceShift } from "@/lib/api/hr";
@@ -144,6 +145,8 @@ export default function SettingsPage() {
       toast.error("Company name and email are required");
       return;
     }
+    const gerr = gstinError(settings.gstin);
+    if (gerr) { toast.error(gerr); return; }
     save({
       company_name:    settings.company_name,
       gstin:           settings.gstin,

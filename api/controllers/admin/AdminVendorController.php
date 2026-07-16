@@ -169,9 +169,9 @@ class AdminVendorController
             Response::error('Vendor code already exists', 409);
         }
         if (($data['gstin'] ?? '') !== '') {
-            $data['gstin'] = strtoupper($data['gstin']);
-            if (!preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $data['gstin'])) {
-                Response::error('GSTIN is invalid', 422);
+            $data['gstin'] = strtoupper(trim($data['gstin']));
+            if (!Validator::isValidGstin($data['gstin'])) {
+                Response::error('GSTIN is invalid — check the 15-character format and checksum', 422);
             }
         }
         if (($data['email'] ?? '') !== '' && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {

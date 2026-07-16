@@ -198,6 +198,16 @@ class AdminSettingsController
                 continue;
             }
 
+            // Company GSTIN — validate format + checksum (empty clears it)
+            if ($key === 'gstin') {
+                $g = strtoupper(trim((string)$value));
+                if ($g !== '' && !Validator::isValidGstin($g)) {
+                    Response::error('gstin must be a valid GSTIN (15-char format + checksum)', 422);
+                }
+                $this->upsert($key, $g);
+                continue;
+            }
+
             // Leave credit days — a positive number (present days per 1 leave credit)
             if ($key === 'leave_credit_days') {
                 $n = (float)$value;

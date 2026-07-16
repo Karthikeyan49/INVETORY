@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Search, Building2, Pencil, Ban, Wallet, IndianRupee } from "lucide-react";
 import { toast } from "sonner";
+import { gstinError } from "@/lib/gstin";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -70,6 +71,8 @@ export default function Vendors() {
 
   async function handleSave() {
     if (!form.name.trim()) { toast.error("Vendor name is required"); return; }
+    const gerr = gstinError(form.gstin);
+    if (gerr) { toast.error(gerr); return; }
     setSaving(true);
     try {
       if (editingId) { await updateVendor(editingId, form); toast.success("Vendor updated"); }
