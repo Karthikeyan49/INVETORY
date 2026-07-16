@@ -42,6 +42,8 @@ export interface Employee {
   bankAccountNumber?: string;
   bankIfsc?: string;
   bankBranch?: string;
+  /** Incentive-type employee (paid via Incentives module) — excluded from monthly payroll. */
+  isIncentive?: boolean;
   pfEnabled?: boolean;
   pfPercent?: number;
   bonusPercent?: number;
@@ -695,7 +697,8 @@ export const payrollApi = {
     month: string,
     workingDaysOverride?: number,
     overtimeHoursByEmployee: Record<string, number> = {},
-    leaveCreditsByEmployee: Record<string, number> = {}
+    leaveCreditsByEmployee: Record<string, number> = {},
+    employeeKey?: string
   ): Promise<Payslip[]> {
     if (MOCK_MODE) {
       await mockDelay();
@@ -813,6 +816,7 @@ export const payrollApi = {
     if (workingDaysOverride !== undefined) body.workingDays = workingDaysOverride;
     body.overtimeHours = overtimeHoursByEmployee;
     body.leaveCredits = leaveCreditsByEmployee;
+    if (employeeKey) body.employee_key = employeeKey;
     return (await apiFetch<{data: Payslip[]}>("/admin/payroll/run", { method: "POST", body: JSON.stringify(body) })).data;
   },
 };

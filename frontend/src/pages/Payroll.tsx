@@ -123,6 +123,21 @@ export default function Payroll() {
     finally { setLoading(false); }
   };
 
+  // One-click generate-and-save for a SINGLE employee (leaves everyone else's
+  // saved slip untouched); the backend still refuses incentive-type employees.
+  const regenerateOne = async (p: Payslip) => {
+    setLoading(true);
+    try {
+      const ot = { [p.employeeId]: Math.max(0, Number(p.overtimeHours ?? 0)) };
+      const lc = { [p.employeeId]: Math.max(0, Number(p.leaveCredit ?? 0) + Number(p.leaveAvailedThisMonth ?? 0)) };
+      const all = await payrollApi.run(month, workingDays, ot, lc, p.employeeId);
+      setSlips(all);
+      toast.success(`Payroll generated for ${p.employeeName}`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to generate payroll");
+    } finally { setLoading(false); }
+  };
+
   useEffect(() => { void load(month, workingDays); }, [load, month, workingDays]);
 
   const stats = useMemo(() => {
@@ -303,7 +318,7 @@ export default function Payroll() {
                 }}
               />
             </div>
-            <Button variant="outline" onClick={rerun}><Calculator className="h-4 w-4" /> Save / Re-run</Button>
+            <Button onClick={rerun} disabled={loading}><Calculator className="h-4 w-4" /> Generate &amp; Save (All)</Button>
             <Button variant="outline" onClick={exportXlsx}><FileDown className="h-4 w-4" /> Excel</Button>
             <Button onClick={exportPdf}><FileDown className="h-4 w-4" /> Register PDF</Button>
           </div>
@@ -377,6 +392,7 @@ export default function Payroll() {
                   <td className="px-4 py-3 text-right font-bold text-primary">{inr(p.netPay)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="inline-flex gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => regenerateOne(p)} disabled={loading} title="Generate & save this employee's payslip"><Calculator className="h-4 w-4" /></Button>
                       <Button size="icon" variant="ghost" onClick={() => setView(p)} title="View & download payslip"><Receipt className="h-4 w-4" /></Button>
                     </div>
                   </td>

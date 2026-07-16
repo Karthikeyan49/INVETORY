@@ -25,6 +25,7 @@ class Employee
         'bankAccountNumber'           => 'bank_account_number',
         'bankIfsc'                    => 'bank_ifsc',
         'bankBranch'                  => 'bank_branch',
+        'isIncentive'                 => 'is_incentive',
         'pfEnabled'                   => 'pf_enabled',
         'pfPercent'                   => 'pf_percent',
         'bonusPercent'                => 'bonus_percent',
@@ -240,6 +241,7 @@ class Employee
             'esiEnabled',
             'uniformIssued',
             'shoesIssued',
+            'isIncentive',
         ], true)) {
             return self::boolValue($value) ? 1 : 0;
         }
@@ -334,6 +336,7 @@ class Employee
             'bankAccountNumber'          => $row['bank_account_number'] ?? '',
             'bankIfsc'                   => $row['bank_ifsc'] ?? '',
             'bankBranch'                 => $row['bank_branch'] ?? '',
+            'isIncentive'                => (bool)($row['is_incentive'] ?? false),
             'pfEnabled'                  => (bool)($row['pf_enabled'] ?? true),
             'pfPercent'                  => (float)($row['pf_percent'] ?? 12),
             'bonusPercent'               => (float)($row['bonus_percent'] ?? 0),

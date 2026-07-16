@@ -75,6 +75,7 @@ const emptyForm = (): EmployeePayload => ({
   bankAccountNumber: "",
   bankIfsc: "",
   bankBranch: "",
+  isIncentive: false,
   pfEnabled: true,
   pfPercent: 12,
   bonusPercent: 0,
@@ -1002,6 +1003,13 @@ export default function Employees() {
 
             <section className="space-y-3 border-t pt-4">
               <h3 className="text-sm font-semibold text-foreground">Payroll Options</h3>
+              <div className="flex items-start gap-2 rounded-lg border border-dashed p-3">
+                <Checkbox id="is-incentive" checked={form.isIncentive} onCheckedChange={(checked) => setField("isIncentive", checked === true)} className="mt-0.5" />
+                <div>
+                  <Label htmlFor="is-incentive" className="cursor-pointer">Incentive-type employee</Label>
+                  <p className="text-xs text-muted-foreground">Paid via the Incentives module (per sale/visit/collection). Excluded from monthly payroll generation.</p>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-8 gap-3">
                 <div className="flex items-center gap-2 pt-7">
                   <Checkbox id="pf-enabled" checked={form.pfEnabled} onCheckedChange={(checked) => setField("pfEnabled", checked === true)} />

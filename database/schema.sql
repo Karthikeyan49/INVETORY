@@ -432,6 +432,7 @@ CREATE TABLE `employees` (
   `bank_ifsc` varchar(20) DEFAULT NULL,
   `bank_branch` varchar(120) DEFAULT NULL,
   `base_salary` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `is_incentive` tinyint(1) NOT NULL DEFAULT 0,
   `site_allowance` decimal(10,2) NOT NULL DEFAULT 0.00,
   `da` decimal(10,2) NOT NULL DEFAULT 0.00,
   `pf_enabled` tinyint(1) NOT NULL DEFAULT 1,

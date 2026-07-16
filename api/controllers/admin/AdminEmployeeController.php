@@ -457,6 +457,7 @@ class AdminEmployeeController
             'bankAccountNumber',
             'bankIfsc',
             'bankBranch',
+            'isIncentive',
             'pfEnabled',
             'pfPercent',
             'bonusPercent',

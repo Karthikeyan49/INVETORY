@@ -94,7 +94,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 - [x] B7. Payslip download: proper company-branded PDF template; single download path (View → Download). (2026-07-16)
 - [x] B8. Settings: hide 'auto absent' card; add configurable 'leave credit days' (days per 1 leave credit) used in payroll. (2026-07-16)
 - [ ] B9. HR module review: after B5–B8, audit HR for mismatches / poor connectivity; fix.
-- [ ] B10. Payroll: one-click generate-and-save for whole month — ALL employees OR single; NEVER for incentive-type employees; ask 'incentive' at employee creation (store flag, use here).
+- [x] B10. Payroll: one-click generate&save (all OR single); excludes incentive-type employees; incentive flag at employee creation. (2026-07-16)
 - [ ] B11. Ensure HR and Finance are properly connected (payroll → expenses/finance).
 - [x] B12. Purchase Order: label item-row fields; single 'extra charges'; FIX item rows not saving (edit/detail reused item-less list rows). (2026-07-16)
 - [x] B13. Purchase Order: dropdown of existing machines; only enter new if not listed. (2026-07-16)

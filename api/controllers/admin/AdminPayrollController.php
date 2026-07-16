@@ -36,7 +36,10 @@ class AdminPayrollController
         $leaveCreditDays = $this->resolveLeaveCreditDays();
         $advanceTotals = EmployeeAdvance::totalsForMonth($month);
 
-        $employees = Database::fetchAll('SELECT * FROM employees WHERE is_active = 1', []);
+        // Incentive-type employees are paid via the Incentives module — NEVER a
+        // monthly salary slip. Optionally restrict to a single employee (one-click
+        // generate for one person) via employee_key / employee_id.
+        $employees = $this->payrollEmployees($request);
 
         foreach ($employees as $emp) {
             $entries = Database::fetchAll(
@@ -142,7 +145,7 @@ class AdminPayrollController
         $leaveCreditDays = $this->resolveLeaveCreditDays();
         $advanceTotals = EmployeeAdvance::totalsForMonth($month);
 
-        $employees = Database::fetchAll('SELECT * FROM employees WHERE is_active = 1', []);
+        $employees = $this->payrollEmployees($request);
         $slips     = [];
 
         foreach ($employees as $emp) {
@@ -379,6 +382,26 @@ class AdminPayrollController
             if (date('w', mktime(0, 0, 0, $m, $d, $y)) !== '0') $count++;
         }
         return $count;
+    }
+
+    /**
+     * Active employees eligible for a monthly payroll slip: excludes incentive-type
+     * staff (paid via the Incentives module). If `employee_key`/`employee_id` is
+     * provided, restricts to that single employee (still excluding incentive type).
+     */
+    private function payrollEmployees(Request $request): array
+    {
+        $key = trim((string)($request->input('employee_key') ?? $request->input('employee_id') ?? ''));
+        if ($key !== '') {
+            return Database::fetchAll(
+                'SELECT * FROM employees WHERE is_active = 1 AND COALESCE(is_incentive, 0) = 0 AND employee_key = ?',
+                [$key]
+            );
+        }
+        return Database::fetchAll(
+            'SELECT * FROM employees WHERE is_active = 1 AND COALESCE(is_incentive, 0) = 0',
+            []
+        );
     }
 
     /** Days of presence that earn 1 leave credit (Settings → "Leave credit days"). Default 20. */
