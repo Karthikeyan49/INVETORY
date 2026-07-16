@@ -1,0 +1,125 @@
+# REQUIREMENTS_SET4 — Autonomous Set-4 Working Memory
+
+Single source of truth for the Set-4 autonomous run on branch `fix/security-hardening`.
+Repo: Sri Vari Scales ERP — React + TypeScript (Vite) frontend + PHP (Router/Controller/Model
+over a static `Database` helper) backend on Hostinger shared hosting.
+
+---
+
+## 0. Autonomous Protocol (the rules)
+
+- ONE stable branch: `fix/security-hardening`. Resume from its latest commit each window.
+- Commit AND push to `origin/fix/security-hardening` AFTER EVERY task so the next window resumes cleanly.
+- Cloud run: NO Hostinger deploy credentials. Implement + test + commit + push only. User deploys.
+- MODULE-INTERCONNECTION MANDATE: for every task, study cross-module links (shared tables/models,
+  nav, events, money flows), wire them as part of the task, re-verify existing links still work.
+  Never ship an isolated feature.
+- DUAL TAX VIEW wherever money appears: plain tax calc AND tax + extra-amount, gated by
+  `tax_view` / `extra_amount`.
+- Tests each task: `cd frontend && npm ci && npm run build`; `php -l` on every changed PHP file;
+  for PDF/template work render + compare against reference PDFs.
+- SAFETY: work only in this repo; never print/exfiltrate secrets; no blind/mass DB deletes, no
+  destructive DROPs without explicit backup — prefer additive, idempotent migrations; use `rg`.
+- Keep ONE open PR from `fix/security-hardening`, updated as progress is made.
+
+---
+
+## 1. Module Map (built from codebase analysis)
+
+### Backend architecture
+- Entry: `api/index.php` — requires all models/controllers, builds `Router`, registers every route,
+  dispatches. Routes are registered inline in `index.php` (NOT a separate routes file), e.g.
+  `$router->get('/vendors', [PurchaseController::class,'listVendors'])`.
+- Config: `api/config/app.php` (env, JWT, rate limits, CORS), `api/config/database.php` (PDO).
+- Core: `api/core/{Router,Request,Response,Database,AppException}.php`. `Database` is a static helper.
+- Migrations: `api/migrations/NNN_*.sql` (currently up to `034_cash_bills.sql`). Idempotent SQL.
+  Runner pattern: `api/run_XXX.php` one-off scripts. Migrations must be additive + idempotent.
+- Helpers: `Money.php` (money math + rounding), `Validator.php`, `JWT.php`, `InventoryPermissions.php`.
+
+### Frontend architecture
+- `frontend/src/App.tsx` — react-router routes (all under `ProtectedRoutes` + `DashboardLayout`).
+- `frontend/src/lib/navigation.ts` — sidebar `sections[]` (module → nav items). Source of nav truth.
+- `frontend/src/components/AppSidebar.tsx` — renders active section from `navigation.ts`.
+- `frontend/src/lib/api/*.ts` — one client module per domain, all over `client.ts` (fetch + JWT).
+- `frontend/src/pages/*.tsx` — one page per route.
+
+### Modules (nav section → pages → api client → controller → model → tables)
+- **Inventory**: Dashboard/Machines/MachineIssues/Items/Spares/Stamping/Movements/DemandForecast.
+  Controllers: MachineController, MachineIssueController, InventoryItemController, SpareController,
+  StampingController. Models: Machine, MachineIssue, MachineMovement, InventoryItem, Spare, Stamping,
+  Inventory* family. Machines are shared with Purchase Orders (PO line items reference machines) and
+  Sales (orders/quotations reference machines).
+- **Sales**: Customers/Orders/Invoices/DeliveryChallans/CashBills/QuotationBuilder.
+  Controllers: OrderController, DeliveryController, CashBillController. Models: Order, DeliveryNote,
+  CashBill, SalesDocument, Payment, PaymentInstallment. Money: dual tax view via extra_amount.
+- **Purchase**: Vendors/Purchases/PurchaseOrders/Expenses.
+  Controller: PurchaseController (vendors + PO + purchases). Models: Vendor, PurchaseOrder,
+  PoRegister, Purchase, PurchaseRequest. Vendors shared: PO vendor dropdown must persist to Vendors.
+- **Finance**: FinancialStatements/CapitalLoans/GST(SalesBilling)/ProfitLoss(Finance)/Planning/Reports.
+  Models: FinanceAnalytics, Funding, GstCompliance, SalesDocument. HR payroll should flow into
+  expenses/finance (B11).
+- **Human Resources**: Employees/Attendance/Payroll/Incentives/AdvanceRegister.
+  Models: Employee, Attendance, AttendanceShift, AttendanceAnalytics, Payroll, Incentive,
+  EmployeeAdvance, EmployeeCompliance. API client: `hr.ts`, `incentives.ts`, `installments.ts`.
+- **Customer Care**: Follow-ups/DailyCallReport(DCR)/CustomerComplaints(Queries).
+  Controllers: FollowupController, QueryController. Models: Followup, Dcr, (queries store).
+- **Intelligence**: AI Insights (/insights) — model Insights.php. → TO REMOVE (B14).
+- **Admin**: Data Interop (/data-interop) — DataImport/Export services. → TO REMOVE (B14).
+
+### Cross-module money flows
+- Orders/Invoices/CashBills/Quotations → Payment/PaymentInstallment → Finance (P&L, statements).
+- Purchases/PO/Expenses → Finance. Payroll (HR) → Expenses/Finance (B11 target, verify wired).
+- Dual tax view (`tax_view`, `extra_amount`) on every money-bearing document.
+
+---
+
+## 2. Definition of Done (per task)
+- Builds green: `npm run build`, `php -l` on changed PHP.
+- Cross-module links wired; existing ones re-verified.
+- Dual tax / tax+extra gating wherever money appears.
+- Checkbox ticked + Progress Log entry appended.
+- Committed AND pushed to `origin/fix/security-hardening`.
+
+---
+
+## 3. Pending Work Checklist (priority order — B first, then deepen A)
+
+### Priority B (specific fixes/features — do first)
+- [ ] B1. Fix pdf.js worker load error — bundle/serve `pdf.worker.min-*.mjs` so PDF view/parse works in prod.
+- [ ] B2. Customer page: button to add customer queries/enquiries + backing store + list.
+- [ ] B3. DCR add popup: widen so content fits WITHOUT bottom scrollbar (no inner scroll).
+- [ ] B4. DCR: add filter by location.
+- [ ] B5. Attendance page: remove 'Attendance Import', 'TMS Status', 'Face Attendance' buttons; bonus = 0.
+- [ ] B6. Employee ID card: replace EcoSudar template (front+back) with generalized ID card; remove EcoSudar completely.
+- [ ] B7. Payslip download: fix template; 2 download options → keep only one.
+- [ ] B8. Settings: hide 'auto absent' card; add configurable 'leave credit days' (days per 1 leave credit) used in payroll.
+- [ ] B9. HR module review: after B5–B8, audit HR for mismatches / poor connectivity; fix.
+- [ ] B10. Payroll: one-click generate-and-save for whole month — ALL employees OR single; NEVER for incentive-type employees; ask 'incentive' at employee creation (store flag, use here).
+- [ ] B11. Ensure HR and Finance are properly connected (payroll → expenses/finance).
+- [ ] B12. Purchase Order: label item-row fields clearly; collapse multiple 'other charges' into single 'extra charges'; FIX item rows not saving (always empty); persist + reload on edit.
+- [ ] B13. Purchase Order: dropdown of existing machines; only enter new if not listed.
+- [ ] B14. Remove 'AI Insights' and 'Data Import' modules entirely — pages, routes, nav, API clients, backend, dead refs.
+- [ ] B15. Quotation Builder: 4 quotation types need DIFFERENT fields — analyse reference PDFs, build distinct page/field-set per type.
+
+### Priority A (ongoing quality-gate audits — never fully complete)
+- [ ] A1. UI/UX presentable & professional — number overflow / large counts, empty/loading states, no broken layouts.
+- [ ] A2. Whole-website CRUD integrity — create saves; edit loads existing values + re-saves. Fix every add/edit/save bug.
+- [ ] A3. Vendors: PO-dropdown-created vendor must appear in Vendors register — fix persistence.
+- [ ] A4. GST validation: every GSTIN field validates format (15-char GSTIN + checksum) on input + save, consistently.
+- [ ] A5. Module audit: every module works; every page correctly wired (routes, API client, data).
+- [ ] A6. Hidden-data audit: no page relies on data hidden/removed; everything connected to depended modules.
+
+---
+
+## 4. Progress Log
+
+### 2026-07-16 (Set-4 window 1)
+- Bootstrapped REQUIREMENTS_SET4.md from backlog. Built Module Map (section 1) by analysing routes
+  (`api/index.php`), nav (`frontend/src/lib/navigation.ts`, `App.tsx`), controllers, models, api clients.
+- Identified B14 targets: Intelligence section (AI Insights → /insights, Insights.php model) and
+  Admin section (Data Interop → /data-interop, DataImport/Export services).
+
+---
+
+## 5. Blocked items
+(none yet)
