@@ -93,7 +93,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 - [x] B6. Employee ID card: replaced EcoSudar template with a generalized, code-drawn card; removed all EcoSudar assets. (2026-07-16)
 - [x] B7. Payslip download: proper company-branded PDF template; single download path (View → Download). (2026-07-16)
 - [x] B8. Settings: hide 'auto absent' card; add configurable 'leave credit days' (days per 1 leave credit) used in payroll. (2026-07-16)
-- [ ] B9. HR module review: after B5–B8, audit HR for mismatches / poor connectivity; fix.
+- [x] B9. HR module review: audited connectivity (attendance/advances/leave-credit/payroll→finance); fixed hardcoded leave-credit divisor. (2026-07-16)
 - [x] B10. Payroll: one-click generate&save (all OR single); excludes incentive-type employees; incentive flag at employee creation. (2026-07-16)
 - [x] B11. HR↔Finance: marking payroll Paid posts/syncs a "Salary & Wages" expense (month net pay) into Finance/P&L. (2026-07-16)
 - [x] B12. Purchase Order: label item-row fields; single 'extra charges'; FIX item rows not saving (edit/detail reused item-less list rows). (2026-07-16)
@@ -230,6 +230,19 @@ over a static `Database` helper) backend on Hostinger shared hosting.
   - Applied on-save: Vendors, Settings (company GSTIN), Invoices (create + edit), QuotationBuilder,
     SalesBilling (frontend `gstinError`); backend AdminVendorController + AdminSettingsController now
     checksum-validate. php -l clean, npm build green.
+
+- **B6/B7/B10/B11/B9 DONE** (summary): B6 template-free ID card; B7 payslip template + single
+  download; B10 incentive flag + one-click payroll (all/single, excludes incentive); B11 payroll→
+  Finance expense on Paid.
+- **B9 HR audit findings** (after B5–B8, B10, B11):
+  - Connectivity verified working: Attendance → Payroll (present days), Advance Register → Payroll
+    (`deductedAdvance`), Incentives → Finance (Incentive posts an expense), Payroll → Finance (B11),
+    leave credits computed from the configurable `leave_credit_days` (B8).
+  - No stale `attendance_ni_amount` refs remain (all `attendance_bonus_amount`).
+  - Fix: removed the hardcoded `/20` leave-credit fallback in Payroll.tsx `load()` — it contradicted
+    the configurable setting; the backend now authoritatively returns `leaveCredit`. (One `/20`
+    remains only in hr.ts MOCK_MODE, which is dev-only and never runs in production.)
+  - npm build green.
 
 ## 5. Blocked items
 - **Open PR from `fix/security-hardening` → `main`**: BLOCKED. GitHub returns

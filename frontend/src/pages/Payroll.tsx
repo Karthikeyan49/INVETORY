@@ -87,7 +87,9 @@ export default function Payroll() {
       if (existing.length > 0) {
         setSlips(existing.map((slip) => ({
           ...slip,
-          leaveCredit: slip.leaveCredit ?? Math.max(0, Math.floor(Number(slip.presentDays ?? 0) / 20) - Number(slip.leaveAvailedThisMonth ?? 0)),
+          // Leave credits are computed server-side from the configurable
+          // "leave credit days" setting (B8); fall back to 0 only if absent.
+          leaveCredit: slip.leaveCredit ?? 0,
         })));
         return;
       }
