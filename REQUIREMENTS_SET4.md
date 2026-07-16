@@ -92,7 +92,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 - [x] B5. Attendance page: remove 'Attendance Import', 'TMS Status', 'Face Attendance' buttons; bonus = 0. (2026-07-16)
 - [ ] B6. Employee ID card: replace EcoSudar template (front+back) with generalized ID card; remove EcoSudar completely.
 - [ ] B7. Payslip download: fix template; 2 download options → keep only one.
-- [ ] B8. Settings: hide 'auto absent' card; add configurable 'leave credit days' (days per 1 leave credit) used in payroll.
+- [x] B8. Settings: hide 'auto absent' card; add configurable 'leave credit days' (days per 1 leave credit) used in payroll. (2026-07-16)
 - [ ] B9. HR module review: after B5–B8, audit HR for mismatches / poor connectivity; fix.
 - [ ] B10. Payroll: one-click generate-and-save for whole month — ALL employees OR single; NEVER for incentive-type employees; ask 'incentive' at employee creation (store flag, use here).
 - [ ] B11. Ensure HR and Finance are properly connected (payroll → expenses/finance).
@@ -159,5 +159,25 @@ over a static `Database` helper) backend on Hostinger shared hosting.
   - Cross-module: DCR area feeds Follow-ups on approval (lead title includes area) — unchanged, verified.
   - php -l clean, npm build green.
 
+- **B8 DONE**: Settings — hide auto-absent card + configurable leave credit days.
+  - Hid the "Attendance Cutoff Time" (auto-absent) card behind `SHOW_AUTO_ABSENT_CARD = false`
+    (code stays wired so cutoffs/working-days still drive attendance; just not shown).
+  - Added `leave_credit_days` setting (default 20): `settings.ts` type, Settings DEFAULTS, a new
+    "Payroll → Leave credit days" card with validation (1–31). Backend `AdminSettingsController`:
+    added to ALLOWED_SCALAR + update whitelist + show() output + range validation (422 on bad).
+  - Payroll now COMPUTES leave credits with the configurable divisor: `AdminPayrollController`
+    `resolveLeaveCreditDays()` (reads setting, default 20), threaded into `run()`+`calculate()`→
+    `buildSlip($leaveCreditDays)`; `earnedLeaveCredit = floor(presentDays / days)`,
+    `leaveCredit = max(0, earned − availed)`. Persisted via `Payroll::upsert` (existing `leave_credit`
+    column) and returned by `Payroll::format`. Additive — does NOT change earned/net pay.
+  - No migration needed: `leave_credit` column pre-exists in schema; setting defaults gracefully.
+  - php -l clean (3 files), npm build green.
+
 ## 5. Blocked items
-(none yet)
+- **Open PR from `fix/security-hardening` → `main`**: BLOCKED. GitHub returns
+  "no history in common with main" (422). `git merge-base fix/security-hardening origin/main`
+  is empty — the branch is an *unrelated root* ("first commit" dc435f8) vs main's root (906fb1c),
+  and also unrelated to `autonomous/set3`. This is a pre-existing repo condition, not something a
+  code change can fix without history rewriting (out of scope / destructive). All Set-4 work still
+  commits + pushes to `origin/fix/security-hardening` normally. To get a PR, the branch would need to
+  be rebased/replayed onto a `main`-descended base, or main re-pointed — a decision for the repo owner.

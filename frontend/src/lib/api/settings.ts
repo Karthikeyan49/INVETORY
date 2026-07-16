@@ -32,6 +32,8 @@ export interface SettingsData {
   attendance_checkout_cutoff_time: string;
   /** CSV of weekday numbers (0=Sun … 6=Sat), e.g. "1,2,3,4,5,6". Auto-absent skips non-listed days. */
   attendance_working_days: string;
+  /** Present days that earn 1 leave credit — used by payroll's leave-credit calc. */
+  leave_credit_days?: number;
 }
 
 interface ApiResponse<T> {

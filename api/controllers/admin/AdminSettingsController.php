@@ -44,6 +44,7 @@ class AdminSettingsController
         'attendance_cutoff_time',
         'attendance_checkout_cutoff_time',
         'attendance_working_days',
+        'leave_credit_days',
     ];
 
     // ── GET /admin/settings ───────────────────────────────────────────────────
@@ -91,6 +92,8 @@ class AdminSettingsController
             'attendance_checkout_cutoff_time' => $map['attendance_checkout_cutoff_time'] ?? '05:00 PM',
             // Working days — CSV of weekday numbers (0=Sun … 6=Sat); auto-absent skips other days
             'attendance_working_days'         => $map['attendance_working_days']         ?? Attendance::DEFAULT_WORKING_DAYS,
+            // Payroll — present days that earn 1 leave credit (used by payroll leave-credit calc)
+            'leave_credit_days'               => (float)($map['leave_credit_days']        ?? 20),
 
             // Notifications
             'notifications' => [
@@ -123,6 +126,7 @@ class AdminSettingsController
             'attendance_cutoff_time',
             'attendance_checkout_cutoff_time',
             'attendance_working_days',
+            'leave_credit_days',
             'pr_prefix', 'pr_padding', 'pr_period_policy',
             'po_prefix', 'po_padding', 'po_period_policy',
             'grn_prefix', 'grn_padding', 'grn_period_policy',
@@ -191,6 +195,17 @@ class AdminSettingsController
                     Response::error("$key must be a comma-separated list of weekday numbers 0–6 (e.g. \"1,2,3,4,5,6\")", 422);
                 }
                 $this->upsert($key, $val);
+                continue;
+            }
+
+            // Leave credit days — a positive number (present days per 1 leave credit)
+            if ($key === 'leave_credit_days') {
+                $n = (float)$value;
+                if ($n <= 0 || $n > 31) {
+                    Response::error('leave_credit_days must be a number between 1 and 31', 422);
+                }
+                // Store trimmed of any trailing .0 so it reads cleanly
+                $this->upsert($key, rtrim(rtrim(number_format($n, 2, '.', ''), '0'), '.'));
                 continue;
             }
 

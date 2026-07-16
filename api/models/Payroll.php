@@ -21,18 +21,19 @@ class Payroll
         Database::execute(
             'INSERT INTO payroll
                (employee_key, month, working_days, present_days, salary_per_day,
-                leaves, leave_availed_this_month, leave_salary, travel_allow,
+                leaves, leave_availed_this_month, leave_credit, leave_salary, travel_allow,
                 total_salary, salary_advance_paid, deducted_advance,
                 base_salary, site_allowance, da, food_allowance, total_salay,
                 earned_salary, attend_bonus,
                 overtime_rate, overtime_hrs, overtime_salary,
                 hra, allowances, pf, professional_tax, deductions, net_pay, generated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
              ON DUPLICATE KEY UPDATE
                working_days=VALUES(working_days),   present_days=VALUES(present_days),
                salary_per_day=VALUES(salary_per_day),
                leaves=VALUES(leaves),
                leave_availed_this_month=VALUES(leave_availed_this_month),
+               leave_credit=VALUES(leave_credit),
                leave_salary=VALUES(leave_salary),   travel_allow=VALUES(travel_allow),
                salary_advance_paid=VALUES(salary_advance_paid),
                deducted_advance=VALUES(deducted_advance),
@@ -51,6 +52,7 @@ class Payroll
                 $data['employeeKey'],   $data['month'],      $data['workingDays'],
                 $data['presentDays'],   $data['salaryPerDay'],
                 $data['leaves'],        $data['leaveAvailedThisMonth'],
+                $data['leaveCredit'] ?? 0,
                 $data['leaveSalary'],   $data['travelAllow'],
                 $data['totalSalary'],   $data['salaryAdvancePaid'],
                 $data['deductedAdvance'],
@@ -79,6 +81,7 @@ class Payroll
             'presentDays'     => (float)$row['present_days'],
             'leaves'          => (int)$row['leaves'],
             'leaveAvailedThisMonth' => (int)($row['leave_availed_this_month'] ?? $row['leaves'] ?? 0),
+            'leaveCredit'     => (float)($row['leave_credit'] ?? 0),
             'leaveSalary'     => (float)($row['leave_salary'] ?? 0),
             'travelAllow'     => (float)($row['travel_allow'] ?? 0),
             'salaryAdvancePaid' => (float)($row['salary_advance_paid'] ?? 0),

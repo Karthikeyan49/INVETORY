@@ -33,6 +33,7 @@ class AdminPayrollController
 
         $workingDays = $this->resolveWorkingDays($request, $month);
         $manualOvertimeHours = $this->resolveOvertimeHours($request);
+        $leaveCreditDays = $this->resolveLeaveCreditDays();
         $advanceTotals = EmployeeAdvance::totalsForMonth($month);
 
         $employees = Database::fetchAll('SELECT * FROM employees WHERE is_active = 1', []);
@@ -50,7 +51,8 @@ class AdminPayrollController
                 $month,
                 $workingDays,
                 $manualOvertimeHours,
-                $advanceTotals
+                $advanceTotals,
+                $leaveCreditDays
             );
 
             Payroll::upsert([
@@ -61,6 +63,7 @@ class AdminPayrollController
                 'salaryPerDay'    => $slip['salaryPerDay'],
                 'leaves'          => $slip['leaves'],
                 'leaveAvailedThisMonth' => $slip['leaveAvailedThisMonth'],
+                'leaveCredit'     => $slip['leaveCredit'],
                 'leaveSalary'     => $slip['leaveSalary'],
                 'travelAllow'     => $slip['travelAllow'],
                 'baseSalary'      => $slip['baseSalary'],
@@ -136,6 +139,7 @@ class AdminPayrollController
 
         $workingDays = $this->resolveWorkingDays($request, $month);
         $manualOvertimeHours = $this->resolveOvertimeHours($request);
+        $leaveCreditDays = $this->resolveLeaveCreditDays();
         $advanceTotals = EmployeeAdvance::totalsForMonth($month);
 
         $employees = Database::fetchAll('SELECT * FROM employees WHERE is_active = 1', []);
@@ -154,7 +158,8 @@ class AdminPayrollController
                 $month,
                 $workingDays,
                 $manualOvertimeHours,
-                $advanceTotals
+                $advanceTotals,
+                $leaveCreditDays
             );
         }
 
@@ -247,7 +252,8 @@ class AdminPayrollController
         string $month,
         int $workingDays,
         array $manualOvertimeHours = [],
-        array $advanceTotals = []
+        array $advanceTotals = [],
+        float $leaveCreditDays = 20.0
     ): array {
         $dayFractions = [];
         $dayLeaves = [];
@@ -287,6 +293,12 @@ class AdminPayrollController
 
         $presentDays = round($present, 1);
         $leaveAvailed = (int)$leaves;
+        // Leave credits: 1 credit is earned per `leaveCreditDays` present days
+        // (configurable in Settings → "Leave credit days"). Available credit is
+        // what's left after this month's availed leave. Purely additive reporting —
+        // does not change earned/net pay here.
+        $earnedLeaveCredit = $leaveCreditDays > 0 ? (int)floor($presentDays / $leaveCreditDays) : 0;
+        $leaveCredit = max(0, $earnedLeaveCredit - $leaveAvailed);
         $earnedSalary = round($salaryPerDay * $presentDays, 2);
         $overtimeSalary = round($overtimeRate * $overtimeHrs, 2);
         $attendanceBonusAmount = round(max(0, (float)($emp['attendance_bonus_amount'] ?? 0)), 2);
@@ -318,6 +330,8 @@ class AdminPayrollController
             'workingDays'     => $workingDays,
             'presentDays'     => $presentDays,
             'leaves'          => $leaveAvailed,
+            'leaveCredit'     => $leaveCredit,
+            'earnedLeaveCredit' => $earnedLeaveCredit,
             'baseSalary'      => $baseSalary,
             'siteAllowance'   => $siteAllowance,
             'da'              => $da,
@@ -365,6 +379,14 @@ class AdminPayrollController
             if (date('w', mktime(0, 0, 0, $m, $d, $y)) !== '0') $count++;
         }
         return $count;
+    }
+
+    /** Days of presence that earn 1 leave credit (Settings → "Leave credit days"). Default 20. */
+    private function resolveLeaveCreditDays(): float
+    {
+        $row = Database::fetch("SELECT setting_value FROM settings WHERE setting_key = 'leave_credit_days' LIMIT 1");
+        $val = isset($row['setting_value']) ? (float)$row['setting_value'] : 0.0;
+        return $val > 0 ? $val : 20.0;
     }
 
     private function resolveOvertimeHours(Request $request): array

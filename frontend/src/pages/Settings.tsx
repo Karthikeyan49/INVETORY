@@ -1,4 +1,4 @@
-import { User, Bell, Mail, Phone, MapPin, Clock, Pencil, Plus, LogOut, FileText } from "lucide-react";
+import { User, Bell, Mail, Phone, MapPin, Clock, Pencil, Plus, LogOut, FileText, BadgeIndianRupee } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,12 @@ const DEFAULTS: SettingsData = {
   attendance_cutoff_time: "10:30 AM",
   attendance_checkout_cutoff_time: "05:00 PM",
   attendance_working_days: "1,2,3,4,5,6",
+  leave_credit_days: 20,
 };
+
+// The auto-absent / attendance-cutoff configuration card is hidden per B8. The
+// code stays wired (cutoffs/working-days still drive attendance) but isn't shown.
+const SHOW_AUTO_ABSENT_CARD = false;
 
 // Weekday picker — value is date('w') number (0=Sun … 6=Sat), matching the backend.
 const WEEKDAYS: { value: number; label: string }[] = [
@@ -539,7 +544,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Attendance cutoffs */}
+      {/* Attendance cutoffs — auto-absent card (hidden per B8) */}
+      {SHOW_AUTO_ABSENT_CARD && (
       <div className="bg-card rounded-xl border p-6 shadow-sm space-y-5">
         <div className="flex items-center gap-2 text-card-foreground">
           <Clock className="h-5 w-5" />
@@ -648,6 +654,44 @@ export default function SettingsPage() {
         </div>
 
         <Button onClick={handleSaveAttendance} disabled={saving}>Save Attendance Settings</Button>
+      </div>
+      )}
+
+      {/* Payroll — leave credit configuration */}
+      <div className="bg-card rounded-xl border p-6 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 text-card-foreground">
+          <BadgeIndianRupee className="h-5 w-5" />
+          <h2 className="font-semibold">Payroll</h2>
+        </div>
+        <div className="space-y-1 max-w-sm">
+          <Label className="text-sm">Leave credit days</Label>
+          <p className="text-xs text-muted-foreground">
+            Present days required to earn <span className="font-medium">1 leave credit</span>.
+            Payroll uses this to compute each employee's available leave credits.
+          </p>
+          <Input
+            type="number"
+            min="1"
+            max="31"
+            step="1"
+            className="mt-1 w-32"
+            value={String(settings.leave_credit_days ?? 20)}
+            onChange={(e) => setField("leave_credit_days", e.target.value === "" ? undefined : Number(e.target.value))}
+          />
+        </div>
+        <Button
+          onClick={() => {
+            const n = Number(settings.leave_credit_days);
+            if (!Number.isFinite(n) || n < 1 || n > 31) {
+              toast.error("Leave credit days must be a number between 1 and 31");
+              return;
+            }
+            save({ leave_credit_days: n }, "Payroll settings updated");
+          }}
+          disabled={saving}
+        >
+          Save Payroll Settings
+        </Button>
       </div>
 
       {/* Notifications */}
