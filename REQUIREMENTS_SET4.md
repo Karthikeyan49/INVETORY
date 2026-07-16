@@ -104,7 +104,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 ### Priority A (ongoing quality-gate audits — never fully complete)
 - [ ] A1. UI/UX presentable & professional — number overflow / large counts, empty/loading states, no broken layouts.
 - [ ] A2. Whole-website CRUD integrity — create saves; edit loads existing values + re-saves. Fix every add/edit/save bug.
-- [ ] A3. Vendors: PO-dropdown-created vendor must appear in Vendors register — fix persistence.
+- [x] A3. Vendors: PO-dropdown-created vendor now persists to the register (Vendor::ensureByName + backfill). (2026-07-16)
 - [ ] A4. GST validation: every GSTIN field validates format (15-char GSTIN + checksum) on input + save, consistently.
 - [ ] A5. Module audit: every module works; every page correctly wired (routes, API client, data).
 - [ ] A6. Hidden-data audit: no page relies on data hidden/removed; everything connected to depended modules.
@@ -210,6 +210,16 @@ over a static `Database` helper) backend on Hostinger shared hosting.
     code, de-duped/sorted). The item "description" is now a free-text `Combobox` — pick a listed
     machine or type a new one ("your typed value will be used"). Cross-module: Inventory Machines →
     PO line items. npm build green.
+
+- **A3 DONE**: PO-created vendors now reach the Vendors register.
+  - Root cause: PO `vendor_name` was free text; `PoRegister::create/update` never wrote a vendor row,
+    and the PO dropdown only suggested names from existing POs — so PO-added vendors couldn't be found.
+  - Fix: `Vendor::ensureByName($name)` (case/space-insensitive find-or-create, auto vendor_code) called
+    from `PoRegister::create()` and `update()`. Migration `037_backfill_vendors_from_po.sql` backfills
+    the register with distinct historical `po_register` + `purchases` vendor names (additive/idempotent)
+    and fills any missing vendor_code. PO vendor Combobox now also lists register vendors
+    (`fetchVendors`) and refreshes after save.
+  - php -l clean, npm build green.
 
 ## 5. Blocked items
 - **Open PR from `fix/security-hardening` → `main`**: BLOCKED. GitHub returns

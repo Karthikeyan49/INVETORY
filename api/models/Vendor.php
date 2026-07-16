@@ -61,6 +61,32 @@ class Vendor
         return $row ? self::format($row) : null;
     }
 
+    /**
+     * Find an existing vendor by (case/space-insensitive) name, or create a
+     * minimal register entry so free-text vendor names used elsewhere (e.g. the
+     * Purchase Order form) always surface in the Vendors register. Returns the
+     * vendor_id, or null if the name is blank.
+     */
+    public static function ensureByName(string $name): ?int
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return null;
+        }
+        $existing = Database::fetch(
+            'SELECT vendor_id FROM vendors WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) ORDER BY is_active DESC, vendor_id ASC LIMIT 1',
+            [$name]
+        );
+        if ($existing) {
+            return (int)$existing['vendor_id'];
+        }
+        return self::create([
+            'name' => $name, 'vendor_code' => '', 'gstin' => '', 'contact_name' => '',
+            'phone' => '', 'email' => '', 'address' => '', 'city' => '', 'state' => '',
+            'pincode' => '', 'payment_terms' => '', 'notes' => '',
+        ]);
+    }
+
     public static function create(array $data): int
     {
         $id = Database::insert(

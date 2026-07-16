@@ -135,6 +135,10 @@ class PoRegister
         );
         self::replaceItems($id, $items);
 
+        // Make the (free-text) vendor surface in the Vendors register so a vendor
+        // added via the PO form can be found there (A3). Non-fatal if it fails.
+        try { Vendor::ensureByName((string)($data['vendor_name'] ?? '')); } catch (\Throwable $e) { /* ignore */ }
+
         // Optional advance recorded through the shared ledger.
         $advance = isset($data['advance']) ? (float)$data['advance'] : 0.0;
         if ($advance > 0) {
@@ -184,6 +188,10 @@ class PoRegister
         );
         if (array_key_exists('items', $data) && is_array($data['items'])) {
             self::replaceItems($id, $data['items']);
+        }
+        // Keep the Vendors register in sync when the vendor name changes (A3).
+        if (array_key_exists('vendor_name', $data)) {
+            try { Vendor::ensureByName((string)$data['vendor_name']); } catch (\Throwable $e) { /* ignore */ }
         }
         return true;
     }

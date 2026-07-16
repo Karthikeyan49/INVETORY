@@ -28,6 +28,7 @@ import {
 } from "@/lib/api/poRegister";
 import { PAYMENT_CATEGORIES } from "@/lib/api/installments";
 import { createMachine, fetchMachines, type Machine } from "@/lib/api/machines";
+import { fetchVendors } from "@/lib/api/vendors";
 import { createSpare, moveSpare, fetchSpares, type Spare } from "@/lib/api/spares";
 
 const money = (v: number | string | null | undefined) =>
@@ -71,9 +72,13 @@ export default function PurchaseOrders() {
 
   const [rows, setRows] = useState<PurchaseOrder[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const [registerVendors, setRegisterVendors] = useState<string[]>([]);
   const vendorSuggestions = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.vendor_name).filter(Boolean))).sort(),
-    [rows],
+    () => Array.from(new Set([
+      ...registerVendors,
+      ...rows.map((r) => r.vendor_name).filter(Boolean),
+    ])).sort((a, b) => a.localeCompare(b)),
+    [rows, registerVendors],
   );
   const locationSuggestions = useMemo(
     () => Array.from(new Set(rows.map((r) => r.location).filter((v): v is string => !!v))).sort(),
@@ -139,6 +144,11 @@ export default function PurchaseOrders() {
   useEffect(() => { loadOutstanding(); }, [loadOutstanding]);
   // Load existing machines once for the line-item dropdown (B13).
   useEffect(() => { fetchMachines({ limit: 200 }).then(({ rows }) => setMachines(rows)).catch(() => setMachines([])); }, []);
+  // Load the Vendors register so registered vendors appear in the PO vendor dropdown (A3).
+  const loadRegisterVendors = useCallback(() => {
+    fetchVendors({ active: true }).then((vs) => setRegisterVendors(vs.map((v) => v.name).filter(Boolean))).catch(() => {});
+  }, []);
+  useEffect(() => { loadRegisterVendors(); }, [loadRegisterVendors]);
 
   function openAdd() {
     setEditingId(null); setForm(emptyForm); setItems([emptyItem()]); setDialogOpen(true);
@@ -211,7 +221,7 @@ export default function PurchaseOrders() {
       if (editingId) { await updatePurchaseOrder(editingId, payload); toast.success("Purchase order updated"); }
       else { await createPurchaseOrder(payload); toast.success("Purchase order created"); }
       setDialogOpen(false);
-      load(); loadOutstanding();
+      load(); loadOutstanding(); loadRegisterVendors();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save purchase order");
     } finally {
