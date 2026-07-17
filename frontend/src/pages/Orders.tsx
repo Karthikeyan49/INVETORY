@@ -181,7 +181,13 @@ export default function Orders() {
       updates.refundStatus = "Initiated";
     }
     try {
-      const res = await updateOrderStatus(selectedOrder._orderId, newStatus.toLowerCase());
+      // Forward tracking number / cancellation reason so the backend persists
+      // them (it gates each by status). Without this they were only reflected in
+      // local state and lost on reload.
+      const extra: { tracking_number?: string; cancel_reason?: string } = {};
+      if (updates.trackingNumber != null) extra.tracking_number = trackingInput;
+      if (newStatus === "Cancelled") extra.cancel_reason = cancelReason;
+      const res = await updateOrderStatus(selectedOrder._orderId, newStatus.toLowerCase(), extra);
       const updated = { ...selectedOrder, ...updates };
       setOrders(orders.map(o => o.id === selectedOrder.id ? updated : o));
       setSelectedOrder(updated);

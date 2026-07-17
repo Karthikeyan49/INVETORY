@@ -129,6 +129,35 @@ over a static `Database` helper) backend on Hostinger shared hosting.
   - Verified: `php -l` clean; `npm run build` green. Rest of the Purchase+Inventory cluster
     (Vendors, PO register incl. line-item persistence, Purchases, InventoryItems, Stamping,
     MachineIssues, Spares, Movements) audited CLEAN.
+- **A2 fix — Sales cluster:**
+  - [HIGH] Orders: cancellation reason + tracking number were built into local state but
+    `updateStatus` called `updateOrderStatus(id, status)` with no `extra` arg, so they were
+    never sent (backend was ready). Now forwards `{tracking_number, cancel_reason}`.
+  - [HIGH] Invoices: editing any invoice reset its status to "Draft" — the edit form hydrated
+    `status` from the linked *order's* status (`order_status`, which `show()` never selects), so
+    it was always "—" → "Draft", then overwrote `i.status` on save. Surfaced the invoice's own
+    status (`normalizeInvoiceStatus(row.status)` → `invoiceStatus`) and hydrate the edit form
+    from it.
+  - [LOW] Deliveries: the customer Combobox matched a real customer but only stored the name;
+    challans saved with `customer_id = NULL`, defeating the id-based history scoping (same-name
+    cross-leak). Now captures + sends the matched `customer_id`.
+  - Clean: Customers, CashBills, SalesBilling (quotations/proformas). (Deferred, MEDIUM: New-
+    Invoice dialog's Payment Status/Status controls are overridden by `storeGst`'s derivation —
+    tracked for a careful follow-up.)
+- **A2 fix — HR + Finance:**
+  - [HIGH] Employees: `attendanceBonusAmount`, `da` (+ `siteAllowance`, `defaultShiftId`) were
+    sent by the form and mapped as columns but missing from `employeePayload()`'s whitelist, so
+    they never persisted — and payroll reads `da`/`attendance_bonus_amount` in `buildSlip`, so
+    both were permanently 0 in every payslip. Added them to the whitelist.
+  - [HIGH] FinancePlanning: the benchmark metric dropdown offered `net_margin`/`collection_days`/
+    `inventory_turnover`, which the backend `BENCHMARK_METRICS` rejects with 422. Aligned the
+    dropdown to the six supported metrics with readable labels.
+  - [LOW] Expenses: clearing an attached bill wasn't persisted (`bill_url: undefined` dropped by
+    JSON.stringify). Now sends `bill_url: input.billUrl ?? null`.
+  - Clean: Attendance, Incentives, AdvanceRegister, CapitalLoans, Finance, Budget, Financial
+    Statements, Followups, Dcr, Queries, Settings. (Deferred, MEDIUM: Payroll manual leave-credit
+    override is a UI no-op vs the server-authoritative computation — tracked for a follow-up.)
+  - Verified: `php -l` clean on both controllers; `npm run build` green.
 
 ### 2026-07-17 (Set-4 window — RESUME)
 - **B15 DONE**: Quotation Builder — 4 distinct field-sets per type (last Priority B item).

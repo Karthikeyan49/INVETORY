@@ -109,7 +109,9 @@ function toApi(input: Partial<Omit<Expense, "id" | "createdBy">>) {
     description: input.description,
     amount: input.amount,
     payment_mode: input.paymentMode,
-    bill_url: input.billUrl,
+    // Send null (not undefined) so clearing an attached bill is persisted rather
+    // than dropped by JSON.stringify and the old URL retained.
+    bill_url: input.billUrl ?? null,
   };
 }
 

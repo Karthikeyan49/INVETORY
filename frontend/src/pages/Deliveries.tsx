@@ -34,7 +34,7 @@ const statusClass: Record<DeliveryStatus, string> = {
 };
 
 const emptyForm = {
-  customer_name: "", customer_phone: "", machine_id: "", category: "", items: "", delivery_date: "", notes: "",
+  customer_name: "", customer_id: null as number | null, customer_phone: "", machine_id: "", category: "", items: "", delivery_date: "", notes: "",
   amount: "", gst_pct: "18", extra_amount: "", extra_from_vendor: "",
 };
 
@@ -232,7 +232,10 @@ export default function Deliveries() {
                     value={form.customer_name}
                     onChange={(v) => {
                       const match = customers.find((c) => c.name === v);
-                      setForm({ ...form, customer_name: v, customer_phone: match ? match.phone : form.customer_phone });
+                      // Capture the matched customer's id so the challan links by
+                      // customer_id (prevents same-name cross-customer leak); typing
+                      // a new name clears it back to null.
+                      setForm({ ...form, customer_name: v, customer_id: match ? match.user_id : null, customer_phone: match ? match.phone : form.customer_phone });
                     }}
                     placeholder="Search or type a new name…"
                   />

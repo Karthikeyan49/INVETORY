@@ -313,7 +313,7 @@ export default function FinancePlanning() {
         <DialogContent>
           <DialogHeader><DialogTitle>Create Benchmark</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Metric"><Select value={benchmark.metric} onValueChange={(v) => setBenchmark({ ...benchmark, metric: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["gross_margin", "net_margin", "expense_ratio", "collection_days", "inventory_turnover"].map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select></Field>
+            <Field label="Metric"><Select value={benchmark.metric} onValueChange={(v) => setBenchmark({ ...benchmark, metric: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[["gross_margin", "Gross Margin %"], ["expense_ratio", "Expense Ratio %"], ["net_profit", "Net Profit ₹"], ["revenue", "Revenue ₹"], ["aov", "Avg Order Value ₹"], ["avg_payment_days", "Avg Payment Days"]].map(([v, label]) => <SelectItem key={v} value={v}>{label}</SelectItem>)}</SelectContent></Select></Field>
             <Field label="Target"><Input type="number" value={benchmark.target_value} onChange={(e) => setBenchmark({ ...benchmark, target_value: e.target.value })} /></Field>
             <Field label="Comparison"><Select value={benchmark.comparison} onValueChange={(v) => setBenchmark({ ...benchmark, comparison: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="gte">Greater/equal</SelectItem><SelectItem value="lte">Less/equal</SelectItem></SelectContent></Select></Field>
             <Field label="Unit"><Input value={benchmark.unit} onChange={(e) => setBenchmark({ ...benchmark, unit: e.target.value })} /></Field>

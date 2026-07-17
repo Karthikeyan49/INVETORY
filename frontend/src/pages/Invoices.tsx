@@ -78,6 +78,7 @@ interface Invoice {
   subjectText: string;
   notes: string;
   orderStatus: string;
+  invoiceStatus: string;
   paymentStatus: string;
   paymentMethod: string;
   amountPaidValue: number;
@@ -118,6 +119,7 @@ interface ApiInvoiceRow {
   delivery_state?: string | null;
   delivery_pincode?: string | null;
   order_status?: string | null;
+  status?: string | null;
   payment_status?: string | null;
   amount_paid?: number | null;
   balance_due?: number | null;
@@ -174,6 +176,17 @@ function normalizeOrderStatus(raw: string | null | undefined): string {
   if (s === "confirmed") return "Confirmed";
   if (s === "cancelled") return "Cancelled";
   return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "—";
+}
+
+// The invoice's OWN lifecycle status (i.status), distinct from the linked
+// order's status. Used to hydrate the edit form so an edit doesn't reset it.
+function normalizeInvoiceStatus(raw: string | null | undefined): string {
+  const s = (raw ?? "").toLowerCase();
+  if (s === "paid") return "Paid";
+  if (s === "sent") return "Sent";
+  if (s === "overdue") return "Overdue";
+  if (s === "cancelled" || s === "canceled") return "Cancelled";
+  return "Draft";
 }
 
 function normalizePaymentStatus(raw: string | null | undefined): string {
@@ -259,6 +272,7 @@ function rowToInvoice(row: ApiInvoiceRow): Invoice {
     subjectText: row.subject || "",
     notes: row.notes || defaultInvoiceNote,
     orderStatus: normalizeOrderStatus(row.order_status),
+    invoiceStatus: normalizeInvoiceStatus(row.status),
     paymentStatus: normalizePaymentStatus(row.payment_status),
     paymentMethod: normalizePayment(row.payment_method),
     amountPaidValue: toNumber(row.amount_paid),
@@ -688,7 +702,7 @@ export default function Invoices() {
         discount:         String(full.discountValue || 0),
         payment_method:   full.paymentMethod === "—" ? "" : full.paymentMethod,
         payment_status:   full.paymentStatus === "—" ? "unpaid" : full.paymentStatus.toLowerCase(),
-        status:           full.orderStatus === "—" ? "Draft" : full.orderStatus,
+        status:           full.invoiceStatus || "Draft",
         notes:            draft.notes,
         terms_and_conditions: draft.termsAndConditions ?? resolveInvoiceTerms(),
         invoice_number:   draft.invoiceNumber,
