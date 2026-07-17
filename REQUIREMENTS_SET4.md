@@ -158,6 +158,16 @@ over a static `Database` helper) backend on Hostinger shared hosting.
     Statements, Followups, Dcr, Queries, Settings. (Deferred, MEDIUM: Payroll manual leave-credit
     override is a UI no-op vs the server-authoritative computation — tracked for a follow-up.)
   - Verified: `php -l` clean on both controllers; `npm run build` green.
+- **A2 follow-up — deferred MEDIUM items resolved/triaged:**
+  - Invoices (create): removed the misleading "Payment Status" control from the New-Invoice
+    dialog — payment status is derived server-side from Sale Type + Advance (cash→Paid,
+    credit→advance-based); an independent selector could desync it from amount_paid/balance. Also
+    narrowed the create "Status" dropdown to valid lifecycle values (Draft/Sent) and stopped
+    sending the ignored `payment_status`. (The EDIT dialog's payment_status IS honored by
+    `update()`, so it's left intact.)
+  - Payroll (leave-credit override): found to be a money-critical frontend/backend semantics
+    divergence, NOT a simple no-op — recorded as a BLOCKED item (§5) for owner decision; fixed the
+    false "saved leave credits" toast in the interim. `npm run build` green.
 
 ### 2026-07-17 (Set-4 window — RESUME)
 - **B15 DONE**: Quotation Builder — 4 distinct field-sets per type (last Priority B item).
@@ -347,6 +357,25 @@ over a static `Database` helper) backend on Hostinger shared hosting.
   - Deferred to next window intentionally (needs PDF analysis; kept out to avoid a half-done ship).
 
 ## 5. Blocked items
+
+- **Payroll leave-credit semantics — needs owner decision (money-critical).** The Payroll page
+  and the backend implement DIFFERENT leave-credit models, and reconciling them changes net pay:
+  - Frontend (`recalculateSlip`, Payroll.tsx): the editable "leave credit" is an available BALANCE;
+    `paidLeave = min(leaves, credit)` converts covered leave into PAID days (raises earnedSalary,
+    cuts the leave-salary deduction). It sends a per-employee `leaveCredits` map on Save.
+  - Backend (`AdminPayrollController::buildSlip`): `leaveCredit = floor(presentDays/leave_credit_days)
+    − availed`, `earnedSalary = perDay × presentDays` (paid leave NOT added), and `leaveSalary`
+    deducts ALL availed leave. `run()` ignores the `leaveCredits` map entirely.
+  - Effect: the manual override is discarded on Save (backend recompute wins). Making the backend
+    honor it (mirror the frontend formula, defaulting the balance to the attendance accrual when no
+    override is sent) would ALTER net pay for every employee who took leave — so it must not be done
+    autonomously on a live payroll. DECISION NEEDED: is the frontend "credit-covers-leave" model the
+    intended payroll behaviour (then port it to the backend, and decide whether credit balances carry
+    over month-to-month, which needs a persistent balance store), or is leave credit purely
+    attendance-derived reporting (then make the Payroll field read-only)? Interim: the success toast
+    no longer falsely claims leave credits were saved.
+
+
 - **Open PR from `fix/security-hardening` → `main`**: BLOCKED. GitHub returns
   "no history in common with main" (422). `git merge-base fix/security-hardening origin/main`
   is empty — the branch is an *unrelated root* ("first commit" dc435f8) vs main's root (906fb1c),

@@ -602,7 +602,7 @@ export default function Invoices() {
           delivery_fee:     parseFloat(newForm.delivery_fee) || 0,
           discount:         parseFloat(newForm.discount) || 0,
           payment_method:   newForm.payment_method || null,
-          payment_status:   newForm.payment_status || "unpaid",
+          // payment_status is derived server-side from sale_type + advance.
           status:           newForm.status,
           notes:            newForm.notes.trim() || null,
           extra_amount:     parseFloat(newForm.extra_amount) || 0,
@@ -1222,26 +1222,15 @@ const viewInvoice = async (inv: Invoice) => {
                   <Combobox options={locationSuggestions} value={newForm.location} onChange={v => setNewForm(f => ({ ...f, location: v }))} placeholder="e.g. Coimbatore" />
                 </div>
                 <div>
-                  <Label>Payment Status</Label>
-                  <Select value={newForm.payment_status} onValueChange={v => setNewForm(f => ({ ...f, payment_status: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unpaid">Unpaid</SelectItem>
-                      <SelectItem value="paid">Paid</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="refunded">Refunded</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
                   <Label>Status</Label>
+                  {/* Payment status is derived from Sale Type + Advance on the server
+                      (cash → Paid, credit → advance-based), so no separate control here.
+                      This lifecycle status is honoured unless the sale is fully paid. */}
                   <Select value={newForm.status} onValueChange={v => setNewForm(f => ({ ...f, status: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Draft">Draft</SelectItem>
                       <SelectItem value="Sent">Sent</SelectItem>
-                      <SelectItem value="Paid">Paid</SelectItem>
-                      <SelectItem value="unpaid">Unpaid</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -119,7 +119,10 @@ export default function Payroll() {
     setLoading(true);
     try {
       setSlips(await payrollApi.run(month, workingDays, overtimeHours, leaveCredits));
-      toast.success("Payroll saved with manual overtime and leave credits");
+      // NOTE: only manual overtime is persisted by the backend today. Leave-credit
+      // balances are recomputed server-side from attendance (see BLOCKED item in
+      // REQUIREMENTS_SET4 §5), so the toast must not claim they were saved.
+      toast.success("Payroll saved (manual overtime applied)");
     }
     catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Failed to re-run payroll"); }
     finally { setLoading(false); }
