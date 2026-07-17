@@ -364,10 +364,14 @@ class MachineController
             Response::error('Machine not found', 404);
         }
         $data = $request->only([
-            'code', 'model', 'category', 'brand_name', 'accuracy', 'platform_size', 'capacity', 'customer_id', 'zone_id',
+            'code', 'model', 'category', 'machine_type', 'brand_name', 'accuracy', 'platform_size', 'capacity', 'customer_id', 'zone_id',
             'purchase_date', 'invoice_date', 'stamping_date', 'sold_date', 'notes',
             'hsn', 'buy_price', 'buy_gst_pct', 'sale_price', 'sale_gst_pct', 'tax_amount', 'extra_amount', 'extra_from_vendor',
         ]);
+        // NOTE: 'status' is intentionally NOT accepted here — status transitions
+        // must go through PUT /machines/{id}/status so their side-effects
+        // (stamping open/cancel, movement log) always run. The edit dialog routes
+        // a changed status through that endpoint separately.
         if ($this->taxView($request) !== 'extended') {
             unset($data['extra_amount'], $data['extra_from_vendor']);
         }

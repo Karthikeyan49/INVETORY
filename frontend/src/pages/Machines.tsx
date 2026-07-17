@@ -97,6 +97,10 @@ export default function Machines() {
   // Add / Edit dialog (shared form)
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  // Original status when the edit dialog opened — a change is routed through the
+  // dedicated /status endpoint (which runs stamping/movement side-effects) rather
+  // than the plain update, which does not accept status.
+  const [editOrigStatus, setEditOrigStatus] = useState<MachineStatus | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
 
@@ -204,9 +208,10 @@ export default function Machines() {
     }).catch(() => {});
   }
 
-  function openAdd() { setEditingId(null); setForm(emptyForm); setDialogOpen(true); loadVendorSuggestions(); }
+  function openAdd() { setEditingId(null); setEditOrigStatus(null); setForm(emptyForm); setDialogOpen(true); loadVendorSuggestions(); }
   function openEdit(m: Machine) {
     setEditingId(m.id);
+    setEditOrigStatus(m.status);
     setForm({
       code: m.code, model: m.model ?? "", category: m.category ?? "", machine_type: m.machine_type ?? "brand", brand_name: m.brand_name ?? "",
       accuracy: m.accuracy ?? "", platform_size: m.platform_size ?? "", capacity: m.capacity ?? "", hsn: m.hsn ?? "",
@@ -246,7 +251,16 @@ export default function Machines() {
     };
     try {
       let createdMachineId: number | undefined;
-      if (editingId) { await updateMachine(editingId, payload); toast.success("Machine updated"); }
+      if (editingId) {
+        await updateMachine(editingId, payload);
+        // Status isn't part of the plain update — persist a change through the
+        // dedicated endpoint so its side-effects (stamping open/cancel, movement
+        // log) run. No-op when the status wasn't touched.
+        if (editOrigStatus !== null && form.status !== editOrigStatus) {
+          await updateMachineStatus(editingId, form.status);
+        }
+        toast.success("Machine updated");
+      }
       else { const created = await createMachine(payload); createdMachineId = created?.id; toast.success("Machine created"); }
       // Best-effort: also record this as a vendor purchase (Purchases page) so
       // "how much was paid for it" is tracked — only when a vendor was named.

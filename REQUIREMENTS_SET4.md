@@ -113,6 +113,23 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 
 ## 4. Progress Log
 
+### 2026-07-17 (Set-4 window — RESUME) — A2 CRUD-integrity audit (ongoing)
+- Ran a 3-way parallel CRUD audit (Sales / Purchase+Inventory / HR+Finance+CustomerCare)
+  tracing each create + edit flow frontend→api client→controller→SQL for silent data loss.
+- **A2 fix — Machines module (Purchase+Inventory cluster):**
+  - [HIGH] Editing a machine's **Type** (local ↔ brand) was silently discarded: `store()`
+    accepted `machine_type` and `Machine::update()` supports the column, but
+    `MachineController::update()`'s `$request->only([...])` allowlist omitted it. Added
+    `machine_type` to the update allowlist.
+  - [MEDIUM] The Edit dialog's **Status** dropdown was a no-op (update allowlist + model map
+    have no `status`; status must go via `PUT /machines/{id}/status` for its stamping/movement
+    side-effects). Fixed on the frontend: `openEdit` captures the original status, and
+    `handleSave` routes a changed status through `updateMachineStatus` after the plain update.
+    Added a backend comment documenting why `status` is intentionally excluded from update.
+  - Verified: `php -l` clean; `npm run build` green. Rest of the Purchase+Inventory cluster
+    (Vendors, PO register incl. line-item persistence, Purchases, InventoryItems, Stamping,
+    MachineIssues, Spares, Movements) audited CLEAN.
+
 ### 2026-07-17 (Set-4 window — RESUME)
 - **B15 DONE**: Quotation Builder — 4 distinct field-sets per type (last Priority B item).
   - Discovery: the PDF renderer (`srivariQuotationPdf.ts`) already reproduced all four
