@@ -99,7 +99,7 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 - [x] B12. Purchase Order: label item-row fields; single 'extra charges'; FIX item rows not saving (edit/detail reused item-less list rows). (2026-07-16)
 - [x] B13. Purchase Order: dropdown of existing machines; only enter new if not listed. (2026-07-16)
 - [x] B14. Remove 'AI Insights' and 'Data Import' modules entirely — pages, routes, nav, API clients, backend, dead refs. (2026-07-16)
-- [ ] B15. Quotation Builder: 4 quotation types need DIFFERENT fields — analyse reference PDFs, build distinct page/field-set per type.
+- [x] B15. Quotation Builder: 4 quotation types now have DISTINCT field-sets (item columns + per-kind commercial terms) captured per-quote and rendered into each format. (2026-07-17)
 
 ### Priority A (ongoing quality-gate audits — never fully complete)
 - [ ] A1. UI/UX presentable & professional — number overflow / large counts, empty/loading states, no broken layouts.
@@ -112,6 +112,47 @@ over a static `Database` helper) backend on Hostinger shared hosting.
 ---
 
 ## 4. Progress Log
+
+### 2026-07-17 (Set-4 window — RESUME)
+- **B15 DONE**: Quotation Builder — 4 distinct field-sets per type (last Priority B item).
+  - Discovery: the PDF renderer (`srivariQuotationPdf.ts`) already reproduced all four
+    reference layouts (retail/industrial/service/stamping columns, subject lines, page-2
+    conditions, footers). The real gaps were (a) the INPUT form was still one generalized
+    field-set, and (b) the per-format COMMERCIAL TERMS (validity, contact person/number,
+    delivery schedule, payment terms) were HARD-CODED in the PDF, so every quote printed the
+    template placeholders instead of its own values.
+  - Analysed the 4 reference PDFs (`docs/reference-pdfs/quotation-*.pdf`) and derived each
+    format's field-set:
+    - retail (F/SVS/12): MODEL·CAPACITY·ACCURACY·PLATFORM SIZE·BASIC PRICE (no qty); terms:
+      Payment Terms, Delivery Schedule; page-2 General Conditions.
+    - industrial (F/SVS/13): + QTY column; numbered terms incl. Validity, Contact Person,
+      Contact Number; page-2 Conditions.
+    - service (F/SVS/15): DESCRIPTION·QTY·BASIC PRICE + TOTAL; terms: Payment Terms; 1 page.
+    - stamping (F/SVS/14): MODEL·CAPACITY·ACCURACY·QTY·UNIT PRICE·BASIC PRICE + TOTAL; terms
+      incl. Quotation validity; 1 page.
+  - Backend: migration `039_quotation_commercial_terms.sql` (idempotent) adds nullable
+    `payment_terms, delivery_schedule, validity, contact_person, contact_number` to
+    `quotations`; `schema.sql` + `create_quotation_builder.sql` updated. `AdminQuotationController`
+    validatePayload/INSERT/UPDATE persist and `show()` (SELECT *) returns them.
+  - Frontend api (`quotations.ts`): new fields on Quotation/QuotationInput; `kindCommercialFields`,
+    `commercialDefaults`, `COMMERCIAL_LABELS`, `CommercialField` drive the per-kind UI + PDF.
+  - Builder page: `kindSpecFields` now a full per-kind item spec (name label Model/Description,
+    qty/unit hidden for retail, Unit Price column only on stamping, capacity/accuracy hidden for
+    service, platform only retail/industrial). New per-kind **Commercial Terms** card renders only
+    the fields that format needs, pre-filled with reference defaults on New / format-change
+    (`withKindDefaults`, non-clobbering). `updItem` made kind-aware: retail/stamping use
+    amount = qty×unit-price; industrial/service treat Basic Price as the entered line total with
+    rate = total÷qty (keeps invoice conversion's unit-price × qty correct). Retail coerces qty=1.
+  - PDF (`srivariQuotationPdf.ts`): commercial terms are now built from the quote data
+    (`commercialFor(kind, d)`) with template fallbacks; GST line uses the quote's rate ("N% Extra").
+    Removed the dead static `commercial` config. Fixed a pre-existing cosmetic bug: the industrial
+    "1." row-number placeholder now only prints on an empty (blank-form) table, not over real rows.
+  - Cross-module re-verified: quotation → Invoice (rate=unit price, qty preserved → totals match),
+    quotation → Delivery Challan (subtotal/gst_amount), Machines → item link. Dual-tax note: the
+    four printed templates use plain GST ("18% Extra") with no off-books extra_amount line, so
+    quotations intentionally keep the plain-tax view (no extra_amount forced) — faithful to refs.
+  - Tested: rendered all 4 formats and compared to the reference PDFs (match); `npm run build`
+    green; `php -l` clean on the controller.
 
 ### 2026-07-16 (Set-4 window 1)
 - Bootstrapped REQUIREMENTS_SET4.md from backlog. Built Module Map (section 1) by analysing routes

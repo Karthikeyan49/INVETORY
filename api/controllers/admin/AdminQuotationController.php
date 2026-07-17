@@ -52,8 +52,9 @@ class AdminQuotationController
                     customer_gstin, customer_contact, customer_contact_phone, reference_no,
                     prepared_by_name, prepared_by_designation, prepared_by_phone, system_title, quotation_kind,
                     quotation_date, subtotal, gst_rate, gst_amount, grand_total,
-                    advance_amount, advance_date, terms, notes, status)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                    advance_amount, advance_date, terms, notes,
+                    payment_terms, delivery_schedule, validity, contact_person, contact_number, status)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
             [
                 $quotationNo,
                 $data['customer_name'],
@@ -77,6 +78,11 @@ class AdminQuotationController
                 $data['advance_date'],
                 $data['terms'],
                 $data['notes'],
+                $data['payment_terms'],
+                $data['delivery_schedule'],
+                $data['validity'],
+                $data['contact_person'],
+                $data['contact_number'],
                 $data['status'],
             ]
         );
@@ -104,7 +110,8 @@ class AdminQuotationController
                     customer_gstin = ?, customer_contact = ?, customer_contact_phone = ?, reference_no = ?,
                     prepared_by_name = ?, prepared_by_designation = ?, prepared_by_phone = ?, system_title = ?, quotation_kind = ?,
                     quotation_date = ?, subtotal = ?, gst_rate = ?, gst_amount = ?, grand_total = ?,
-                    advance_amount = ?, advance_date = ?, terms = ?, notes = ?, status = ?,
+                    advance_amount = ?, advance_date = ?, terms = ?, notes = ?,
+                    payment_terms = ?, delivery_schedule = ?, validity = ?, contact_person = ?, contact_number = ?, status = ?,
                     updated_at = NOW()
              WHERE quotation_id = ?',
             [
@@ -112,7 +119,8 @@ class AdminQuotationController
                 $data['customer_gstin'], $data['customer_contact'], $data['customer_contact_phone'], $data['reference_no'],
                 $data['prepared_by_name'], $data['prepared_by_designation'], $data['prepared_by_phone'], $data['system_title'], $data['quotation_kind'],
                 $data['quotation_date'], $totals['subtotal'], $data['gst_rate'], $totals['gst_amount'], $totals['grand_total'],
-                $data['advance_amount'], $data['advance_date'], $data['terms'], $data['notes'], $data['status'], $id,
+                $data['advance_amount'], $data['advance_date'], $data['terms'], $data['notes'],
+                $data['payment_terms'], $data['delivery_schedule'], $data['validity'], $data['contact_person'], $data['contact_number'], $data['status'], $id,
             ]
         );
 
@@ -233,6 +241,11 @@ class AdminQuotationController
             'advance_date'            => $advanceDateRaw === '' ? null : $this->normalizeDate($advanceDateRaw),
             'terms'                   => trim((string) $request->input('terms', '')) ?: null,
             'notes'                   => trim((string) $request->input('notes', '')) ?: null,
+            'payment_terms'           => trim((string) $request->input('payment_terms', '')) ?: null,
+            'delivery_schedule'       => trim((string) $request->input('delivery_schedule', '')) ?: null,
+            'validity'                => trim((string) $request->input('validity', '')) ?: null,
+            'contact_person'          => trim((string) $request->input('contact_person', '')) ?: null,
+            'contact_number'          => trim((string) $request->input('contact_number', '')) ?: null,
             'status'                  => $status,
             'items'                   => $clean,
         ];

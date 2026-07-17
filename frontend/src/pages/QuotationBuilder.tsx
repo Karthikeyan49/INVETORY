@@ -8,8 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   listQuotations, getQuotation, createQuotation, updateQuotation, deleteQuotation,
-  QUOTATION_KINDS,
+  QUOTATION_KINDS, kindCommercialFields, commercialDefaults, COMMERCIAL_LABELS,
   type QuotationListRow, type QuotationItem, type QuotationInput, type QuotationKind, type Quotation,
+  type CommercialField,
 } from "@/lib/api/quotations";
 import { downloadQuotation as downloadSrivariQuotation, type QuotationRow as SrivariRow } from "@/lib/srivariQuotationPdf";
 import { createDelivery } from "@/lib/api/deliveries";
@@ -75,13 +76,22 @@ const blankItem = (): QuotationItem => ({
   gst_rate: 18, components: [],
 });
 
-// Which spec columns each Sri Vari format actually prints — drives which
-// fields the item form shows (capacity/accuracy everywhere but Service;
-// platform size only on Retail/Industrial, matching the four PDF layouts).
+// Which item-row fields each Sri Vari format actually needs — drives a DISTINCT
+// line-item field-set per quotation type, matching the four reference PDFs:
+//   retail      MODEL · CAPACITY · ACCURACY · PLATFORM SIZE · BASIC PRICE   (no qty)
+//   industrial  MODEL · CAPACITY · ACCURACY · PLATFORM SIZE · QTY · BASIC PRICE
+//   service     DESCRIPTION · QTY · BASIC PRICE                            (no specs)
+//   stamping    MODEL · CAPACITY · ACCURACY · QTY · UNIT PRICE · BASIC PRICE
 const kindSpecFields = (kind: QuotationKind) => ({
-  capacity: kind !== "service",
-  accuracy: kind !== "service",
+  isService:    kind === "service",
+  capacity:     kind !== "service",
+  accuracy:     kind !== "service",
   platformSize: kind === "retail" || kind === "industrial",
+  qty:          kind !== "retail",          // retail template has no QTY column
+  unitPrice:    kind !== "retail",          // retail shows a single BASIC PRICE
+  nameLabel:    kind === "service" ? "Description *" : "Model *",
+  namePlaceholder: kind === "service" ? "e.g. Load-cell replacement & calibration" : "e.g. DS-852",
+  priceLabel:   kind === "stamping" ? "Unit Price (₹)" : "Rate (₹)",
 });
 
 type Header = {
@@ -93,6 +103,9 @@ type Header = {
   quotation_date: string; gst_rate: number;
   advance_amount: number; advance_date: string;
   terms: string; notes: string;
+  // Per-format commercial terms (B15) — shown selectively per kind.
+  payment_terms: string; delivery_schedule: string; validity: string;
+  contact_person: string; contact_number: string;
 };
 const blankHeader = (): Header => ({
   customer_name: "", customer_address: "", customer_gstin: "",
@@ -103,6 +116,8 @@ const blankHeader = (): Header => ({
   quotation_date: today(), gst_rate: 18,
   advance_amount: 0, advance_date: "",
   terms: DEFAULT_TERMS, notes: "",
+  payment_terms: "", delivery_schedule: "", validity: "",
+  contact_person: "", contact_number: "",
 });
 
 export default function QuotationBuilder() {
@@ -196,11 +211,37 @@ export default function QuotationBuilder() {
 
   // ── form helpers ──────────────────────────────────────────────────────────
   const setH = (k: keyof Header, v: any) => setHeader((h) => ({ ...h, [k]: v }));
+  // Fill any *empty* commercial-terms fields with the reference defaults for a
+  // kind (so switching format pre-fills the template values without clobbering
+  // anything the user already typed).
+  const withKindDefaults = (h: Header, kind: QuotationKind): Header => {
+    const def = commercialDefaults(kind);
+    const next: Header = { ...h, quotation_kind: kind };
+    for (const f of kindCommercialFields(kind)) {
+      if (!String(next[f] ?? "").trim() && def[f]) next[f] = def[f]!;
+    }
+    return next;
+  };
+  const changeKind = (kind: QuotationKind) => setHeader((h) => withKindDefaults(h, kind));
   const updItem = (i: number, patch: Partial<QuotationItem>) =>
     setItems((arr) => arr.map((it, idx) => {
       if (idx !== i) return it;
       const next = { ...it, ...patch };
-      if (("qty" in patch || "rate" in patch) && !("amount" in patch)) next.amount = (Number(next.qty) || 0) * (Number(next.rate) || 0);
+      const kind = header.quotation_kind;
+      // Retail/Stamping print a UNIT PRICE (rate); the Basic Price is the line
+      // total = qty × rate, so recompute it when qty/rate change.
+      // Industrial/Service print only a BASIC PRICE (the line total, entered
+      // directly); there rate is the derived unit price = total ÷ qty, so a qty
+      // change adjusts rate and leaves the entered Basic Price untouched.
+      const unitPriced = kind === "retail" || kind === "stamping";
+      if (unitPriced) {
+        if (("qty" in patch || "rate" in patch) && !("amount" in patch)) {
+          next.amount = (Number(next.qty) || 0) * (Number(next.rate) || 0);
+        }
+      } else if ("qty" in patch && !("amount" in patch) && !("rate" in patch)) {
+        const q = Number(next.qty) || 0;
+        next.rate = q > 0 ? Number(next.amount || 0) / q : Number(next.amount || 0);
+      }
       return next;
     }));
   const addItem = () => setItems((a) => [...a, blankItem()]);
@@ -386,6 +427,7 @@ export default function QuotationBuilder() {
     updItem(i, {
       name: filled.name,
       rate: filled.rate,
+      amount: filled.amount,
       unit: filled.unit,
       specifications: filled.specifications,
       gst_rate: filled.gst_rate,
@@ -467,7 +509,7 @@ export default function QuotationBuilder() {
 
   const startNew = (kind: QuotationKind) => {
     setEditingId(null);
-    setHeader({ ...blankHeader(), quotation_kind: kind, terms: orgQuotationTerms || DEFAULT_TERMS });
+    setHeader(withKindDefaults({ ...blankHeader(), terms: orgQuotationTerms || DEFAULT_TERMS }, kind));
     setItems([]);
     setPickerOpen(false);
     setView("form");
@@ -489,23 +531,30 @@ export default function QuotationBuilder() {
         advance_amount: Number(q.advance_amount ?? 0),
         advance_date: q.advance_date ? q.advance_date.slice(0, 10) : "",
         terms: q.terms || DEFAULT_TERMS, notes: q.notes || "",
+        payment_terms: q.payment_terms || "", delivery_schedule: q.delivery_schedule || "",
+        validity: q.validity || "", contact_person: q.contact_person || "", contact_number: q.contact_number || "",
       });
       setItems(q.items?.length ? q.items.map((it) => ({ ...it, gst_rate: Number(it.gst_rate ?? 18), specifications: it.specifications || "", components: it.components || [] })) : []);
       setView("form");
     } catch (e: any) { toast.error(e?.message ?? "Failed to open quotation"); }
   };
 
-  const payload = (): QuotationInput => ({
-    ...header,
-    gst_rate: Number(header.gst_rate) || 0,
-    advance_amount: Number(header.advance_amount) || 0,
-    items: items.filter((it) => it.name.trim()).map((it) => ({
-      ...it, qty: Number(it.qty) || 0, rate: Number(it.rate) || 0, amount: Number(it.amount) || 0,
-      gst_rate: Number(it.gst_rate ?? 18),
-      specifications: it.specifications || "",
-      components: (it.components || []).filter((c) => (c.name || "").trim() || (c.group || "").trim()),
-    })),
-  });
+  const payload = (): QuotationInput => {
+    // Retail has no QTY column — every line is a single unit; keep the data
+    // faithful to the printed format.
+    const retail = header.quotation_kind === "retail";
+    return {
+      ...header,
+      gst_rate: Number(header.gst_rate) || 0,
+      advance_amount: Number(header.advance_amount) || 0,
+      items: items.filter((it) => it.name.trim()).map((it) => ({
+        ...it, qty: retail ? 1 : Number(it.qty) || 0, rate: Number(it.rate) || 0, amount: Number(it.amount) || 0,
+        gst_rate: Number(it.gst_rate ?? 18),
+        specifications: it.specifications || "",
+        components: (it.components || []).filter((c) => (c.name || "").trim() || (c.group || "").trim()),
+      })),
+    };
+  };
 
   // Map the builder's line items onto the Sri Vari quotation row shape for the
   // selected format (R2). Retail/industrial/stamping are machine-shaped rows;
@@ -529,12 +578,19 @@ export default function QuotationBuilder() {
     const to = [header.customer_name, header.customer_address, header.customer_gstin ? `GSTIN: ${header.customer_gstin}` : "", header.customer_contact_phone ? `Phone: ${header.customer_contact_phone}` : ""]
       .filter((x) => x && String(x).trim()).join("\n");
     const subtotal = its.reduce((s, it) => s + Number(it.amount ?? Number(it.qty || 0) * Number(it.rate || 0)), 0);
+    const gstPct = Number(header.gst_rate);
     downloadSrivariQuotation({
       to,
       refNo: header.reference_no || "",
       date: header.quotation_date || "",
       rows: toSrivariRows(kind, its),
       total: subtotal,
+      paymentTerms: header.payment_terms || "",
+      deliverySchedule: header.delivery_schedule || "",
+      validity: header.validity || "",
+      contactPerson: header.contact_person || "",
+      contactNumber: header.contact_number || "",
+      gstNote: Number.isFinite(gstPct) && gstPct > 0 ? `${gstPct}% Extra` : undefined,
     }, kind);
   };
 
@@ -823,7 +879,7 @@ export default function QuotationBuilder() {
           <label className="text-sm font-medium">Sri Vari Format</label>
           <select
             value={header.quotation_kind}
-            onChange={(e) => setH("quotation_kind", e.target.value as QuotationKind)}
+            onChange={(e) => changeKind(e.target.value as QuotationKind)}
             className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
           >
             {QUOTATION_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
@@ -836,6 +892,40 @@ export default function QuotationBuilder() {
         <div><label className="text-sm font-medium">GST %</label><Input type="number" value={header.gst_rate} onChange={(e) => setH("gst_rate", e.target.value)} className="mt-1" /></div>
         <div><label className="text-sm font-medium">Advance Amount (₹)</label><Input inputMode="decimal" placeholder="0" value={header.advance_amount ? String(header.advance_amount) : ""} onChange={(e) => setH("advance_amount", Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)} className="mt-1" /></div>
         <div><label className="text-sm font-medium">Advance Date</label><Input type="date" value={header.advance_date} onChange={(e) => setH("advance_date", e.target.value)} className="mt-1" /></div>
+      </div>
+
+      {/* Commercial Terms — a DISTINCT field-set per Sri Vari format (B15).
+          These print in the quotation's COMMERCIAL TERMS box; only the fields
+          the selected format actually uses are shown. */}
+      <div className="rounded-xl border bg-card p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-foreground">Commercial Terms</span>
+          <span className="text-xs text-muted-foreground">
+            {QUOTATION_KINDS.find((k) => k.value === header.quotation_kind)?.label} format —
+            these appear in the quotation's COMMERCIAL TERMS box. GST is shown as “{Number(header.gst_rate) || 18}% Extra”.
+          </span>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {kindCommercialFields(header.quotation_kind).map((f: CommercialField) => (
+            <div key={f}>
+              <label className="text-sm font-medium">
+                {header.quotation_kind === "stamping" && f === "validity" ? "Quotation Validity" : COMMERCIAL_LABELS[f]}
+              </label>
+              <Input
+                value={header[f]}
+                onChange={(e) => setH(f, e.target.value)}
+                placeholder={
+                  f === "validity" ? "e.g. Up to 31.03.2026"
+                    : f === "contact_person" ? "e.g. M.THANIGAIMALAI"
+                    : f === "contact_number" ? "e.g. 9345027134, 9865668414"
+                    : commercialDefaults(header.quotation_kind)[f] || ""
+                }
+                className="mt-1"
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Shared datalist for component-name dropdown (manual selection) */}
@@ -1013,30 +1103,51 @@ export default function QuotationBuilder() {
             <p className="text-xs text-muted-foreground">…or use the + on a product chip, or “Add Item” below.</p>
           </div>
         )}
-        {items.map((it, i) => (
+        {items.map((it, i) => {
+          const spec = kindSpecFields(header.quotation_kind);
+          const isRetail = header.quotation_kind === "retail";
+          const isStamping = header.quotation_kind === "stamping";
+          return (
           <div key={i} className="rounded-xl border bg-card p-5 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-muted-foreground">Item {i + 1}</span>
               <Button size="sm" variant="ghost" className="h-8 gap-1 text-destructive" onClick={() => delItem(i)}><Trash2 className="h-4 w-4" /> Remove</Button>
             </div>
             <div className="grid gap-3 md:grid-cols-12">
-              <div className="md:col-span-12"><label className="text-xs text-muted-foreground">Link product (auto-fills name / rate / unit / specs)</label><Input list="product-options" placeholder="Type or pick a product…" onChange={(e) => applyProductToItem(i, e.target.value)} onBlur={(e) => applyProductToItem(i, e.target.value)} className="mt-1" /></div>
-              <div className="md:col-span-4"><label className="text-xs text-muted-foreground">Product name *</label><Input value={it.name} onChange={(e) => updItem(i, { name: e.target.value })} className="mt-1" /></div>
+              {!spec.isService && (
+                <div className="md:col-span-12"><label className="text-xs text-muted-foreground">Link machine (auto-fills name / rate / unit / specs)</label><Input list="product-options" placeholder="Type or pick a machine…" onChange={(e) => applyProductToItem(i, e.target.value)} onBlur={(e) => applyProductToItem(i, e.target.value)} className="mt-1" /></div>
+              )}
+              <div className={spec.isService ? "md:col-span-6" : "md:col-span-4"}><label className="text-xs text-muted-foreground">{spec.nameLabel}</label><Input value={it.name} onChange={(e) => updItem(i, { name: e.target.value })} placeholder={spec.namePlaceholder} className="mt-1" /></div>
               <div className="md:col-span-2"><label className="text-xs text-muted-foreground">Make</label><Input list="opt-make" value={it.make} onChange={(e) => updItem(i, { make: e.target.value })} onBlur={(e) => remember("make", e.target.value)} className="mt-1" /></div>
-              <div className="md:col-span-1"><label className="text-xs text-muted-foreground">Qty</label><Input type="number" value={it.qty} onChange={(e) => updItem(i, { qty: Number(e.target.value) })} className="mt-1" /></div>
-              <div className="md:col-span-1"><label className="text-xs text-muted-foreground">Unit</label><Input list="opt-unit" value={it.unit} onChange={(e) => updItem(i, { unit: e.target.value })} onBlur={(e) => remember("unit", e.target.value)} className="mt-1" /></div>
-              <div className="md:col-span-2"><label className="text-xs text-muted-foreground">Rate (₹)</label><Input type="number" value={it.rate} onChange={(e) => updItem(i, { rate: Number(e.target.value) })} className="mt-1" /></div>
-              <div className="md:col-span-2"><label className="text-xs text-muted-foreground">Amount (₹)</label><Input type="number" value={it.amount} onChange={(e) => updItem(i, { amount: Number(e.target.value) })} className="mt-1" /></div>
-              {kindSpecFields(header.quotation_kind).capacity && (
+              {spec.qty && (
+                <div className="md:col-span-1"><label className="text-xs text-muted-foreground">Qty</label><Input type="number" value={it.qty} onChange={(e) => updItem(i, { qty: Number(e.target.value) })} className="mt-1" /></div>
+              )}
+              {spec.qty && (
+                <div className="md:col-span-1"><label className="text-xs text-muted-foreground">Unit</label><Input list="opt-unit" value={it.unit} onChange={(e) => updItem(i, { unit: e.target.value })} onBlur={(e) => remember("unit", e.target.value)} className="mt-1" /></div>
+              )}
+              {spec.unitPrice && (
+                <div className="md:col-span-2"><label className="text-xs text-muted-foreground">{spec.priceLabel}</label><Input type="number" value={it.rate} onChange={(e) => updItem(i, { rate: Number(e.target.value) })} className="mt-1" /></div>
+              )}
+              <div className="md:col-span-2">
+                <label className="text-xs text-muted-foreground">Basic Price (₹){isStamping ? " · auto" : ""}</label>
+                {isRetail ? (
+                  <Input type="number" value={it.rate} onChange={(e) => updItem(i, { rate: Number(e.target.value), qty: 1 })} className="mt-1" />
+                ) : isStamping ? (
+                  <Input type="number" value={it.amount} readOnly title="Qty × Unit Price" className="mt-1 bg-muted/40" />
+                ) : (
+                  <Input type="number" value={it.amount} onChange={(e) => { const v = Number(e.target.value); const q = Number(it.qty) || 0; updItem(i, { amount: v, rate: q > 0 ? v / q : v }); }} className="mt-1" />
+                )}
+              </div>
+              {spec.capacity && (
                 <div className="md:col-span-3"><label className="text-xs text-muted-foreground">Capacity</label><Input value={it.capacity ?? ""} onChange={(e) => updItem(i, { capacity: e.target.value })} placeholder="e.g. 30kg" className="mt-1" /></div>
               )}
-              {kindSpecFields(header.quotation_kind).accuracy && (
+              {spec.accuracy && (
                 <div className="md:col-span-3"><label className="text-xs text-muted-foreground">Accuracy</label><Input value={it.accuracy ?? ""} onChange={(e) => updItem(i, { accuracy: e.target.value })} placeholder="e.g. 1g" className="mt-1" /></div>
               )}
-              {kindSpecFields(header.quotation_kind).platformSize && (
+              {spec.platformSize && (
                 <div className="md:col-span-3"><label className="text-xs text-muted-foreground">Platform Size</label><Input value={it.platform_size ?? ""} onChange={(e) => updItem(i, { platform_size: e.target.value })} placeholder="e.g. 400x400" className="mt-1" /></div>
               )}
-              <div className="md:col-span-10"><label className="text-xs text-muted-foreground">Specifications</label><Input value={it.specifications ?? ""} onChange={(e) => updItem(i, { specifications: e.target.value })} placeholder="Technical specifications / details" className="mt-1" /></div>
+              <div className="md:col-span-10"><label className="text-xs text-muted-foreground">{spec.isService ? "Service details" : "Specifications"}</label><Input value={it.specifications ?? ""} onChange={(e) => updItem(i, { specifications: e.target.value })} placeholder={spec.isService ? "Scope of work / notes" : "Technical specifications / details"} className="mt-1" /></div>
               <div className="md:col-span-2">
                 <label className="text-xs text-muted-foreground">GST %</label>
                 <select
@@ -1072,7 +1183,8 @@ export default function QuotationBuilder() {
               ))}
             </div>
           </div>
-        ))}
+          );
+        })}
         <Button variant="outline" onClick={addItem} className="gap-2"><Plus className="h-4 w-4" /> Add Item</Button>
       </div>{/* /items column */}
 

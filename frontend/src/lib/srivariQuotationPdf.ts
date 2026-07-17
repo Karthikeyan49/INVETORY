@@ -66,7 +66,11 @@ export interface QuotationRow {
   platformSize?: string; qty?: string; unitPrice?: number; basicPrice?: number; description?: string;
 }
 export interface QuotationData {
-  to?: string; refNo?: string; date?: string; rows?: QuotationRow[]; total?: number; validity?: string;
+  to?: string; refNo?: string; date?: string; rows?: QuotationRow[]; total?: number;
+  // Per-format commercial terms (B15). When provided they override the template
+  // placeholders; when absent the reference default for the kind is used.
+  paymentTerms?: string; deliverySchedule?: string; validity?: string;
+  contactPerson?: string; contactNumber?: string; gstNote?: string;
 }
 export type QuotationKind = "retail" | "industrial" | "service" | "stamping";
 
@@ -85,7 +89,7 @@ const CONDITIONS: Array<[string, string]> = [
 interface KindCfg {
   fromPin: string; orderPin: string; subject: string; intro: string;
   headers: string[]; weights: number[]; bodyH: number;
-  commercial: Array<[string, string]>; numbered: boolean; totalRow: "none" | "amount" | "TOTAL";
+  numbered: boolean; totalRow: "none" | "amount" | "TOTAL";
   page2: boolean; footerCode: string; footerCellSuffix: string; bodySno?: string;
 }
 
@@ -94,31 +98,45 @@ const CFG: Record<QuotationKind, KindCfg> = {
     fromPin: "631 502.", orderPin: "631 502", subject: "Quotation for ESSAE ELECTRONIC WEIGHING SCALE – Reg.",
     intro: INTRO_LOWEST, headers: ["S.NO", "MODEL", "CAPACITY", "ACCURACY", "PLATFORM SIZE", "BASIC PRICE"],
     weights: [0.6, 1, 1, 1, 1, 1.1], bodyH: 62,
-    commercial: [["Payment Terms", "100% payment along with order"], ["Delivery Schedule", "Immediately"], ["GST", "18% Extra"]],
     numbered: false, totalRow: "none", page2: true, footerCode: "F/SVS/12", footerCellSuffix: "",
   },
   industrial: {
     fromPin: "631 501.", orderPin: "631 501", subject: "Quotation for ELECTRONIC WEIGHING SCALE – Reg.",
     intro: INTRO_LOWEST, headers: ["S.NO", "MODEL", "CAPACITY", "ACCURACY", "PLATFORM SIZE", "QTY", "BASIC PRICE"],
     weights: [0.6, 1, 1, 1, 1.2, 0.6, 1], bodyH: 62,
-    commercial: [["1. Delivery Schedule", "14 Days from the Purchase Order Date."], ["2. Payment Terms", " 100% pay in advance"], ["3. Validity", "Up to 21.12.2025"], ["4. Contact Person", "M.THANIGAIMALAI"], ["5. Contact Number", "9345027134, 9865668414"], ["6. GST", "18% Extra"]],
     numbered: true, totalRow: "none", page2: true, footerCode: "F/SVS/13", footerCellSuffix: "", bodySno: "1.",
   },
   service: {
     fromPin: "631 502.", orderPin: "631 502", subject: "QUOTATION FOR ELECTRONIC WEIGHING SCALE SERVICE – REG.",
     intro: INTRO_PLEASURE, headers: ["S.NO", "DESCRIPTION", "QTY", "BASIC PRICE"],
     weights: [0.6, 3, 0.7, 1.1], bodyH: 200,
-    commercial: [["Payment Terms", "100% payment in advance"], ["GST", "18% Extra"]],
     numbered: false, totalRow: "amount", page2: false, footerCode: "F/SVS/15", footerCellSuffix: ".",
   },
   stamping: {
     fromPin: "631 502.", orderPin: "631 502", subject: "Quotation for ELECTRONIC WEIGHING SCALE STAMPING – Reg.",
     intro: INTRO_LOWEST, headers: ["S.NO", "MODEL", "CAPACITY", "ACCURACY", "QTY", "UNIT PRICE", "BASIC PRICE"],
     weights: [0.6, 1, 1, 1, 0.6, 1, 1], bodyH: 120,
-    commercial: [["Payment Terms", "100% pay in advance"], ["Delivery Schedule", "One week"], ["GST", "18% Extra"], ["Quotation validity", ""]],
     numbered: false, totalRow: "TOTAL", page2: false, footerCode: "F/SVS/14", footerCellSuffix: ".",
   },
 };
+
+// Build the printed COMMERCIAL TERMS rows for a kind, using per-quote values
+// where given and falling back to the reference-template placeholders. The GST
+// line always shows "<rate>% Extra" (matching the four printed templates).
+function commercialFor(kind: QuotationKind, d: QuotationData): Array<[string, string]> {
+  const pay = d.paymentTerms, del = d.deliverySchedule, val = d.validity;
+  const person = d.contactPerson, number = d.contactNumber, gst = d.gstNote || "18% Extra";
+  switch (kind) {
+    case "retail":
+      return [["Payment Terms", pay || "100% payment along with order"], ["Delivery Schedule", del || "Immediately"], ["GST", gst]];
+    case "industrial":
+      return [["1. Delivery Schedule", del || "14 Days from the Purchase Order Date."], ["2. Payment Terms", pay || "100% pay in advance"], ["3. Validity", val || ""], ["4. Contact Person", person || "M.THANIGAIMALAI"], ["5. Contact Number", number || "9345027134, 9865668414"], ["6. GST", gst]];
+    case "service":
+      return [["Payment Terms", pay || "100% payment in advance"], ["GST", gst]];
+    case "stamping":
+      return [["Payment Terms", pay || "100% pay in advance"], ["Delivery Schedule", del || "One week"], ["GST", gst], ["Quotation validity", val || ""]];
+  }
+}
 
 const L = 48, R = 560, CX = (L + R) / 2;
 
@@ -195,9 +213,11 @@ export function buildQuotation(d: QuotationData, kind: QuotationKind): Doc {
     const startY = tTop + headH / 2 - (lines.length - 1) * 5 + 3;
     lines.forEach((ln, li) => txt(doc, ln, cxc, startY + li * 10, { size: 9.5, bold: true, align: "center" }));
   });
-  if (cfg.bodySno) txt(doc, cfg.bodySno, (xs[0] + xs[1]) / 2, tTop + headH + 22, { size: 10, align: "center" });
   // rows
   const rows = d.rows || [];
+  // The industrial template pre-prints a "1." row number on the blank form;
+  // only show that placeholder when there are no real rows to number.
+  if (cfg.bodySno && rows.length === 0) txt(doc, cfg.bodySno, (xs[0] + xs[1]) / 2, tTop + headH + 22, { size: 10, align: "center" });
   rows.forEach((r, i) => {
     const y = tTop + headH + 16 + i * 16;
     const cell = (idx: number, v?: string, align: "left" | "center" | "right" = "center") => {
@@ -222,12 +242,13 @@ export function buildQuotation(d: QuotationData, kind: QuotationKind): Doc {
   }
 
   // COMMERCIAL TERMS
+  const commercial = commercialFor(kind, d);
   let y = bodyBot + 26;
   txt(doc, cfg.numbered ? "COMMERCIAL TERMS :" : (kind === "retail" ? "COMMERCIAL TERMS" : "COMMERCIAL TERMS :"), L, y, { size: 10, bold: true });
   y += 8;
-  const ctH = cfg.commercial.length * 15 + 12;
+  const ctH = commercial.length * 15 + 12;
   doc.rect(L + 4, y, R - L - 8, ctH);
-  cfg.commercial.forEach(([k, v], i) => {
+  commercial.forEach(([k, v], i) => {
     const ly = y + 15 + i * 15;
     if (cfg.numbered) { txt(doc, k, L + 14, ly, { size: 9.5 }); txt(doc, `: ${v}`, L + 150, ly, { size: 9.5 }); }
     else { diamond(doc, L + 20, ly - 3); txt(doc, k, L + 30, ly, { size: 9.5 }); txt(doc, `: ${v}`, L + 150, ly, { size: 9.5 }); }

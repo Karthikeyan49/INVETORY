@@ -64,6 +64,13 @@ export type Quotation = QuotationListRow & {
   advance_date: string | null;
   terms: string | null;
   notes: string | null;
+  // Per-format commercial terms (B15) — which of these a quotation actually
+  // uses depends on its kind (see QUOTATION_KINDS / kindCommercialFields).
+  payment_terms: string | null;
+  delivery_schedule: string | null;
+  validity: string | null;
+  contact_person: string | null;
+  contact_number: string | null;
   items: QuotationItem[];
 };
 
@@ -86,8 +93,45 @@ export type QuotationInput = {
   advance_date?: string;
   terms?: string;
   notes?: string;
+  payment_terms?: string;
+  delivery_schedule?: string;
+  validity?: string;
+  contact_person?: string;
+  contact_number?: string;
   status?: QuotationStatus;
   items: QuotationItem[];
+};
+
+// Which commercial-terms fields each Sri Vari format actually prints — drives
+// the per-kind "Commercial Terms" card in the builder and the PDF template.
+// Mirrors the four reference PDFs in docs/reference-pdfs/quotation-*.pdf.
+export type CommercialField = "payment_terms" | "delivery_schedule" | "validity" | "contact_person" | "contact_number";
+export const kindCommercialFields = (kind: QuotationKind): CommercialField[] => {
+  switch (kind) {
+    case "retail":     return ["payment_terms", "delivery_schedule"];
+    case "industrial": return ["delivery_schedule", "payment_terms", "validity", "contact_person", "contact_number"];
+    case "service":    return ["payment_terms"];
+    case "stamping":   return ["payment_terms", "delivery_schedule", "validity"];
+  }
+};
+
+// Reference default value for a commercial field, per kind (from the printed
+// templates). Used to pre-fill a new quotation so the PDF matches the format.
+export const commercialDefaults = (kind: QuotationKind): Partial<Record<CommercialField, string>> => {
+  switch (kind) {
+    case "retail":     return { payment_terms: "100% payment along with order", delivery_schedule: "Immediately" };
+    case "industrial": return { delivery_schedule: "14 Days from the Purchase Order Date.", payment_terms: "100% pay in advance", contact_number: "9345027134, 9865668414" };
+    case "service":    return { payment_terms: "100% payment in advance" };
+    case "stamping":   return { payment_terms: "100% pay in advance", delivery_schedule: "One week" };
+  }
+};
+
+export const COMMERCIAL_LABELS: Record<CommercialField, string> = {
+  payment_terms: "Payment Terms",
+  delivery_schedule: "Delivery Schedule",
+  validity: "Validity",
+  contact_person: "Contact Person",
+  contact_number: "Contact Number",
 };
 
 export async function listQuotations(): Promise<QuotationListRow[]> {
