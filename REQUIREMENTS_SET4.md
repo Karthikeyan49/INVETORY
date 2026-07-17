@@ -168,6 +168,13 @@ over a static `Database` helper) backend on Hostinger shared hosting.
   - Payroll (leave-credit override): found to be a money-critical frontend/backend semantics
     divergence, NOT a simple no-op — recorded as a BLOCKED item (§5) for owner decision; fixed the
     false "saved leave credits" toast in the interim. `npm run build` green.
+- **A5/A6 spot-check (wiring + hidden-data):**
+  - Nav→route integrity: all 33 `navigation.ts` `url`s resolve to a registered `App.tsx` route —
+    no broken sidebar links.
+  - B14 removed-module cleanup re-verified: zero remaining references to AI Insights (`/insights`,
+    Insights*) or Data Interop (`/data-interop`, DataExportService/BackupService/AdminInsights) in
+    frontend or `api/index.php` — no dangling routes/imports/nav.
+  - A1/A5/A6 remain open for continued deepening in later windows.
 
 ### 2026-07-17 (Set-4 window — RESUME)
 - **B15 DONE**: Quotation Builder — 4 distinct field-sets per type (last Priority B item).
